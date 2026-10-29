@@ -5,7 +5,7 @@ app.set('trust proxy', 1);
 app.use(express.json({ limit: '12mb' }));
 
 const GROQ_KEY = process.env.GROQ_API_KEY;
-const MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 const VISION_MODEL = process.env.GROQ_VISION_MODEL || 'qwen/qwen3.6-27b';
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || '';
 
@@ -62,12 +62,20 @@ app.post('/api/chat', async (req, res) => {
   const controller = new AbortController();
   res.on('close', () => controller.abort());
   try {
-    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
-      body: JSON.stringify({ model: hasImg ? VISION_MODEL : MODEL, messages: [SYSTEM, ...history], stream: true }),
-      signal: controller.signal
-    });
+    // Agar koi model Groq ne hata diya (404), agla model apne aap try hoga
+    const candidates = hasImg ? [VISION_MODEL]
+      : [...new Set([MODEL, 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'])];
+    let r;
+    for (const model of candidates) {
+      r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
+        body: JSON.stringify({ model, messages: [SYSTEM, ...history], stream: true }),
+        signal: controller.signal
+      });
+      if (r.ok || r.status !== 404) break;
+      console.log('Model not found, trying next:', model);
+    }
     if (!r.ok) return res.status(r.status).json({ error: await r.text() });
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
