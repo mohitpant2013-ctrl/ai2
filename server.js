@@ -12,6 +12,34 @@ const TAVILY = process.env.TAVILY_API_KEY || ''; // optional: full web search
 const FALLBACK = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'];
 const G = 'https://api.groq.com/openai/v1';
 const UA = { 'User-Agent': 'DeftAI/1.0 (personal chat app)' };
+const crypto = require('crypto');
+const fs = require('fs');
+const RU = process.env.UPSTASH_REDIS_REST_URL, RT = process.env.UPSTASH_REDIS_REST_TOKEN;
+const SECRET = process.env.TOKEN_SECRET || (KEY || '') + PASS + 'deftai';
+
+// Storage: Upstash Redis if configured (permanent), else memory + temp file (resets on redeploy)
+const FILE = '/tmp/deftai-data.json';
+let mem = {}; try { mem = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
+let wt; const persist = () => { clearTimeout(wt); wt = setTimeout(() => { try { fs.writeFileSync(FILE, JSON.stringify(mem)); } catch {} }, 500); };
+async function kvGet(k) {
+  if (RU) { const j = await (await fetch(`${RU}/get/${encodeURIComponent(k)}`, { headers: { Authorization: 'Bearer ' + RT } })).json(); return j.result ? JSON.parse(j.result) : null; }
+  return mem[k] ?? null;
+}
+async function kvSet(k, v) {
+  if (RU) { await fetch(RU, { method: 'POST', headers: { Authorization: 'Bearer ' + RT }, body: JSON.stringify(['SET', k, JSON.stringify(v)]) }); return; }
+  mem[k] = v; persist();
+}
+const scrypt = (pw, salt) => new Promise((ok, no) => crypto.scrypt(pw, salt, 32, (e, k) => e ? no(e) : ok(k.toString('hex'))));
+const sign = u => { const b = Buffer.from(u + '|' + (Date.now() + 30 * 864e5)).toString('base64url'); return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url'); };
+function who(req) {
+  const [b, s] = (req.get('authorization') || '').replace('Bearer ', '').split('.');
+  if (!b || !s) return null;
+  const good = crypto.createHmac('sha256', SECRET).update(b).digest('base64url');
+  if (s.length !== good.length || !crypto.timingSafeEqual(Buffer.from(s), Buffer.from(good))) return null;
+  const [u, exp] = Buffer.from(b, 'base64url').toString().split('|');
+  return Date.now() < +exp ? u : null;
+}
+
 
 // Groq call with automatic fallback if a model was removed (404)
 async function groq(body, models, signal, effort = 'medium') {
@@ -36,7 +64,8 @@ const MODES = {
   friend: 'Talk like a warm, funny close friend (casual Hinglish if the user uses it), but stay accurate.',
   short: 'Answer in at most 3 short sentences unless asked for more.'
 };
-const sysPrompt = (model, src, mode) => `You are DeftAI, a smart, friendly and careful AI assistant. Today's date: ${new Date().toDateString()}. Your underlying language model is ${model} (served via Groq); never claim to be GPT-4, ChatGPT or any other model.
+const sysPrompt = (model, src, mode) => `You are DeftAI, a smart, friendly and careful AI assistant created by FyreDeft. Today's date: ${new Date().toDateString()}.
+Identity rules: if (and only if) someone asks who you are, who made/created/built you, or who FyreDeft is, answer exactly this (translated into the user's language/style): "I'm DeftAI, made by FyreDeft, a Minecraft CPVP player, Minecraft developer, Java developer and AI researcher." Add nothing more about FyreDeft; if asked for more details, say you don't have any. Never invent facts about FyreDeft. If asked about the technical model behind you, say you run on ${model} via Groq. Never claim to be GPT-4, ChatGPT, Claude or any other product.
 Language: reply in the user's language/style. If the user writes Hinglish (Hindi in Roman script) reply in natural Hinglish; if English, reply in English.
 Typos: silently fix obvious typos; if a message is truly unclear, ask ONE short clarifying question.
 Accuracy: never invent facts, dates, numbers, quotes, names or links. If unsure or you don't know, say so plainly.
@@ -73,7 +102,7 @@ async function makeQuery(history, lastText) {
   try {
     const r = await groq({
       messages: [
-        { role: 'system', content: 'You write search queries. Given a chat, output ONLY a short English search query (2-8 words, keywords and proper nouns) that finds facts to answer the LAST user message on Wikipedia/web. If the message is a greeting, chit-chat, coding help, maths, or creative/personal writing needing no lookup, output exactly NONE.' },
+        { role: 'system', content: 'You write search queries. Given a chat, output ONLY a short English search query (2-8 words, keywords and proper nouns) that finds facts to answer the LAST user message on Wikipedia/web. If the message is a greeting, chit-chat, coding help, maths, creative/personal writing, or a question about the AI assistant itself or who made it (these need no lookup), output exactly NONE.' },
         { role: 'user', content: ctx }],
       stream: false, temperature: 0, max_completion_tokens: 400
     }, ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'], AbortSignal.timeout(9000), 'low');
@@ -113,8 +142,48 @@ const limited = ip => {
   return a.length > 20;
 };
 
+const h = f => (req, res) => f(req, res).catch(e => { console.error(e); if (!res.headersSent) res.status(500).json({ error: 'Server error' }); });
+const NAME = /^[a-zA-Z0-9_.]{3,20}$/;
+const ah = new Map();
+const authLimited = ip => { const n = Date.now(), a = (ah.get(ip) || []).filter(t => n - t < 60000); a.push(n); ah.set(ip, a); return a.length > 10; };
+
+app.post('/api/register', h(async (req, res) => {
+  if (authLimited(req.ip)) return res.status(429).json({ error: 'Bahut tries. 1 minute ruko.' });
+  const username = String(req.body.username || ''), password = String(req.body.password || '');
+  if (PASS && req.body.invite !== PASS) return res.status(403).json({ error: 'Invite code galat hai' });
+  if (!NAME.test(username)) return res.status(400).json({ error: 'Username 3-20 characters: letters, numbers, _ ya .' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password kam se kam 6 characters ka rakho' });
+  const k = 'u:' + username.toLowerCase();
+  if (await kvGet(k)) return res.status(409).json({ error: 'Ye username le liya gaya hai' });
+  const salt = crypto.randomBytes(16).toString('hex');
+  await kvSet(k, { name: username, salt, hash: await scrypt(password, salt), at: Date.now() });
+  res.json({ token: sign(username.toLowerCase()), username });
+}));
+
+app.post('/api/login', h(async (req, res) => {
+  if (authLimited(req.ip)) return res.status(429).json({ error: 'Bahut tries. 1 minute ruko.' });
+  const username = String(req.body.username || ''), password = String(req.body.password || '');
+  const u = await kvGet('u:' + username.toLowerCase());
+  const bad = () => res.status(401).json({ error: 'Username ya password galat hai' });
+  if (!u) return bad();
+  const a = Buffer.from(await scrypt(password, u.salt)), b = Buffer.from(u.hash);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return bad();
+  res.json({ token: sign(username.toLowerCase()), username: u.name });
+}));
+
+app.get('/api/chats', h(async (req, res) => {
+  const u = who(req); if (!u) return res.status(401).json({ error: 'Login karo' });
+  res.json({ chats: (await kvGet('c:' + u)) || [] });
+}));
+app.put('/api/chats', h(async (req, res) => {
+  const u = who(req); if (!u) return res.status(401).json({ error: 'Login karo' });
+  const c = req.body.chats;
+  if (!Array.isArray(c) || JSON.stringify(c).length > 950000) return res.status(413).json({ error: 'Chats bahut badi hain' });
+  await kvSet('c:' + u, c); res.json({ ok: true });
+}));
+
 app.post('/api/chat', async (req, res) => {
-  if (PASS && req.get('x-access-code') !== PASS) return res.status(401).json({ error: 'Wrong password' });
+  if (!who(req)) return res.status(401).json({ error: 'Login karo' });
   if (!KEY) return res.status(500).json({ error: 'GROQ_API_KEY set nahi hai' });
   if (limited(req.ip)) return res.status(429).json({ error: 'Too many requests' });
 
