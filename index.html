@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DeftAI</title>
+<style>
+:root{--bg:#1f1e1d;--side:#171716;--card:#2b2a28;--bd:#3a3936;--tx:#ece9e2;--mu:#9b978d;--ac:#d97757}
+*{box-sizing:border-box}
+body{margin:0;height:100dvh;display:flex;background:var(--bg);color:var(--tx);font:15px/1.65 -apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;cursor:pointer;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 12px}
+button:hover{background:#383632}
+#side{width:260px;background:var(--side);border-right:1px solid var(--bd);display:flex;flex-direction:column;padding:12px;gap:8px;z-index:5}
+#side h2{margin:4px 4px 8px;color:var(--ac);font-size:20px}
+#list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.ci{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--mu);font-size:14px}
+.ci span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ci:hover,.ci.on{background:var(--card);color:var(--tx)}
+.ci b{font-weight:400;opacity:.5;padding-left:8px}.ci b:hover{opacity:1;color:#f87171}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#top{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--bd);font-size:13px;color:var(--mu)}
+#menu{display:none}
+.dot{width:9px;height:9px;border-radius:50%;background:#777}.dot.on{background:#22c55e;box-shadow:0 0 8px #22c55e}.dot.off{background:#ef4444}.dot.wait{background:#eab308}
+#chat{flex:1;overflow-y:auto;padding:24px 16px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.m{max-width:100%;word-wrap:break-word}
+.u{align-self:flex-end;background:var(--card);padding:10px 14px;border-radius:14px;max-width:85%;white-space:pre-wrap}
+.b{align-self:flex-start;width:100%}
+.b p{margin:.4em 0}.b pre{background:#141413;padding:12px;border-radius:8px;overflow-x:auto;font-size:13px}
+.b code{background:#141413;padding:1px 5px;border-radius:4px;font-size:13px}.b pre code{padding:0;background:none}
+.b table{border-collapse:collapse}.b td,.b th{border:1px solid var(--bd);padding:4px 8px}
+.chip{display:inline-block;background:#3a3936;border-radius:6px;padding:2px 8px;font-size:12px;margin:0 4px 6px 0}
+.u img{max-width:180px;border-radius:8px;display:block;margin-bottom:6px}
+#empty{margin:12vh auto 0;text-align:center;color:var(--mu)}#empty h1{color:var(--tx);font-weight:500}
+#box{padding:0 16px 16px}
+#bar{max-width:760px;margin:0 auto;background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:10px}
+#pend{display:flex;flex-wrap:wrap;gap:6px}
+.pc{background:#3a3936;border-radius:8px;padding:3px 8px;font-size:12px;display:flex;gap:6px;align-items:center}.pc img{height:28px;border-radius:4px}.pc i{cursor:pointer;font-style:normal;opacity:.6}
+#row{display:flex;gap:8px;align-items:flex-end}
+textarea{flex:1;background:none;border:none;outline:none;color:var(--tx);font:inherit;resize:none;max-height:180px;padding:6px}
+#send{background:var(--ac);border:none;color:#fff;font-weight:600}
+#stop{display:none;background:#eab308;color:#000;border:none}
+#auth{position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:99}
+.card{background:var(--side);border:1px solid var(--bd);padding:28px;border-radius:14px;width:340px;max-width:92vw;display:flex;flex-direction:column;gap:12px}
+.card h3{margin:0;color:var(--ac);text-align:center}
+.card input{padding:12px;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:8px;font:inherit}
+.card small{color:var(--mu)}#profs{display:flex;flex-wrap:wrap;gap:6px}
+@media(max-width:760px){#side{position:fixed;inset:0 auto 0 0;transform:translateX(-100%);transition:.2s}#side.open{transform:none}#menu{display:block;padding:4px 10px}}
+</style></head><body>
+
+<div id="auth"><div class="card">
+  <h3>🤖 DeftAI Login</h3>
+  <div id="profs"></div>
+  <input id="lu" placeholder="Username (apna profile naam)">
+  <input id="lp" type="password" placeholder="Access password" onkeydown="if(event.key==='Enter')login()">
+  <button style="background:var(--ac);border:none" onclick="login()">Login</button>
+  <small>Har dost apna alag username banaye. Password wahi jo owner ne ACCESS_PASSWORD rakha hai.</small>
+</div></div>
+
+<div id="side">
+  <h2>🤖 DeftAI</h2>
+  <button onclick="newChat();renderList();renderMsgs();$('side').classList.remove('open')">＋ New chat</button>
+  <div id="list"></div>
+  <div style="color:var(--mu);font-size:13px" id="uname"></div>
+  <button onclick="$('auth').style.display='flex';showProfs()">Switch profile</button>
+</div>
+
+<div id="main">
+  <div id="top"><button id="menu" onclick="$('side').classList.toggle('open')">☰</button>
+    <span class="dot wait" id="dot"></span><span id="stxt">Checking...</span></div>
+  <div id="chat"><div class="wrap" id="msgs"></div></div>
+  <div id="box"><div id="bar">
+    <div id="pend"></div>
+    <div id="row">
+      <button onclick="$('file').click()" title="Image / file">📎</button>
+      <input type="file" id="file" multiple hidden accept="image/*,.txt,.md,.csv,.json,.js,.py,.html,.css,.java,.c,.cpp,.xml,.log,.pdf">
+      <textarea id="inp" rows="1" placeholder="Kuch bhi poochho... (Hinglish chalega)"></textarea>
+      <button id="stop" onclick="ctrl&&ctrl.abort()">■ Stop</button>
+      <button id="send" onclick="send()">Send</button>
+    </div></div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+let user=null,code='',chats=[],cur=null,pend=[],ctrl=null;
+const key=()=>'deft_chats_'+user;
+const clean=s=>s.replace(/<think>[\s\S]*?(<\/think>|$)/g,'').trim();
+const md=s=>DOMPurify.sanitize(marked.parse(clean(s)));
+
+function load(){try{chats=JSON.parse(localStorage.getItem(key()))||[]}catch{chats=[]}}
+function save(){try{localStorage.setItem(key(),JSON.stringify(chats.map(c=>({...c,messages:c.messages.map(m=>({role:m.role,content:m.content,shown:m.shown,files:m.files,imgs:Array.isArray(m.imgs)?m.imgs.length:m.imgs}))}))))}
+  catch(e){alert('Storage full! Purani chats delete karo.')}}
+
+function showProfs(){const ps=JSON.parse(localStorage.getItem('deft_profiles')||'[]');
+  $('profs').innerHTML='';ps.forEach(p=>{const b=document.createElement('button');b.textContent='👤 '+p;b.onclick=()=>{$('lu').value=p;$('lp').focus()};$('profs').appendChild(b)})}
+function login(){const u=$('lu').value.trim();if(!u)return alert('Username daalo!');
+  user=u;code=$('lp').value.trim();localStorage.setItem('deft_user',u);localStorage.setItem('deft_code',code);
+  const ps=JSON.parse(localStorage.getItem('deft_profiles')||'[]');if(!ps.includes(u)){ps.push(u);localStorage.setItem('deft_profiles',JSON.stringify(ps))}start()}
+function start(){$('auth').style.display='none';$('uname').textContent='👤 '+user;load();
+  if(!chats.length)newChat();else cur=chats[0].id;renderList();renderMsgs()}
+function newChat(){const c={id:Date.now().toString(36),title:'New chat',messages:[]};chats.unshift(c);cur=c.id}
+const getChat=()=>chats.find(c=>c.id===cur);
+
+function renderList(){const l=$('list');l.innerHTML='';
+  chats.forEach(c=>{const d=document.createElement('div');d.className='ci'+(c.id===cur?' on':'');
+    d.innerHTML='<span></span><b title="Delete">✕</b>';d.firstChild.textContent=c.title;
+    d.onclick=()=>{cur=c.id;renderList();renderMsgs();$('side').classList.remove('open')};
+    d.lastChild.onclick=e=>{e.stopPropagation();if(!confirm('Ye chat delete karni hai?'))return;
+      chats=chats.filter(x=>x.id!==c.id);if(!chats.length)newChat();else if(cur===c.id)cur=chats[0].id;save();renderList();renderMsgs()};
+    l.appendChild(d)})}
+
+function addMsg(m){const d=document.createElement('div');
+  if(m.role==='user'){d.className='m u';
+    if(Array.isArray(m.imgs))m.imgs.forEach(u=>{const i=document.createElement('img');i.src=u;d.appendChild(i)});
+    else if(m.imgs){const s=document.createElement('span');s.className='chip';s.textContent='🖼 '+m.imgs+' image';d.appendChild(s);d.appendChild(document.createElement('br'))}
+    (m.files||[]).forEach(f=>{const s=document.createElement('span');s.className='chip';s.textContent='📄 '+f;d.appendChild(s)});
+    d.appendChild(document.createTextNode(m.shown??m.content))}
+  else{d.className='m b';d.innerHTML=md(m.content)}
+  $('msgs').appendChild(d);$('chat').scrollTop=1e9;return d}
+function renderMsgs(){const w=$('msgs');w.innerHTML='';const c=getChat();
+  if(!c.messages.length)w.innerHTML='<div id="empty"><h1>Namaste '+user.replace(/</g,'')+' 👋</h1><p>Main DeftAI hoon. Text, image ya file — kuch bhi bhejo.</p></div>';
+  else c.messages.forEach(addMsg)}
+
+// ---- Attachments ----
+$('file').onchange=async e=>{for(const f of e.target.files){try{
+  if(f.type.startsWith('image/')){if(pend.filter(p=>p.img).length>=3){alert('Max 3 images');continue}pend.push({name:f.name,img:await compress(f)})}
+  else if(f.name.toLowerCase().endsWith('.pdf'))pend.push({name:f.name,text:(await readPdf(f)).slice(0,15000)});
+  else pend.push({name:f.name,text:(await f.text()).slice(0,15000)})}catch(err){alert(f.name+' read nahi hui')}}
+  e.target.value='';renderPend()};
+function compress(f){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>{const s=Math.min(1,1024/Math.max(i.width,i.height));
+  const c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;c.getContext('2d').drawImage(i,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.8))};
+  i.onerror=rej;i.src=URL.createObjectURL(f)})}
+async function readPdf(f){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const d=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;let t='';
+  for(let i=1;i<=Math.min(d.numPages,30);i++){t+=(await(await d.getPage(i)).getTextContent()).items.map(x=>x.str).join(' ')+'\n'}return t}
+function renderPend(){const p=$('pend');p.innerHTML='';pend.forEach((a,i)=>{const d=document.createElement('div');d.className='pc';
+  if(a.img){const im=document.createElement('img');im.src=a.img;d.appendChild(im)}
+  d.appendChild(document.createTextNode(a.name+' '));const x=document.createElement('i');x.textContent='✕';x.onclick=()=>{pend.splice(i,1);renderPend()};d.appendChild(x);p.appendChild(d)})}
+
+// ---- Send ----
+async function send(){
+  if(ctrl)return;const inp=$('inp');const text=inp.value.trim();if(!text&&!pend.length)return;
+  const c=getChat();let content=text;const files=[],imgs=[];
+  pend.forEach(a=>{if(a.img)imgs.push(a.img);else{files.push(a.name);content+=`\n\n[File: ${a.name}]\n${a.text}`}});
+  if(!content.trim())content='Is image ko detail mein describe karo.';
+  const um={role:'user',content,shown:text,files,imgs};c.messages.push(um);
+  if(c.title==='New chat'){c.title=(text||files[0]||'Image chat').slice(0,40)}
+  chats=[c,...chats.filter(x=>x!==c)];
+  pend=[];renderPend();inp.value='';inp.style.height='auto';renderList();renderMsgs();save();
+
+  const bd=addMsg({role:'assistant',content:'_Thinking..._'});
+  $('send').style.display='none';$('stop').style.display='inline-block';ctrl=new AbortController();let full='';
+  try{
+    const msgs=c.messages.slice(-10).map((m,i,a)=>{
+      if(i===a.length-1&&Array.isArray(m.imgs)&&m.imgs.length)
+        return{role:m.role,content:[{type:'text',text:m.content},...m.imgs.map(u=>({type:'image_url',image_url:{url:u}}))]};
+      return{role:m.role,content:m.content}});
+    const r=await fetch('/api/chat',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json','x-access-code':code},body:JSON.stringify({messages:msgs})});
+    if(r.status===401)throw new Error('AUTH');if(r.status===429)throw new Error('RATE');if(!r.ok)throw new Error('API:'+(await r.text()).slice(0,200));
+    const rd=r.body.getReader(),dc=new TextDecoder();let buf='';
+    while(true){const{done,value}=await rd.read();if(done)break;buf+=dc.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop();
+      for(const l of lines){const t=l.trim();if(!t.startsWith('data:'))continue;const d=t.slice(5).trim();if(d==='[DONE]')continue;
+        try{const x=JSON.parse(d).choices?.[0]?.delta?.content;if(x){full+=x;bd.innerHTML=md(full);$('chat').scrollTop=1e9}}catch{}}}
+    c.messages.push({role:'assistant',content:full});
+  }catch(e){
+    if(e.name==='AbortError'){if(full)c.messages.push({role:'assistant',content:full+' _[stopped]_'});bd.innerHTML=md(full+' _[stopped]_')}
+    else{const m=e.message==='AUTH'?'🔒 Password galat hai. "Switch profile" se dobara login karo.':e.message==='RATE'?'⏳ Bahut jaldi-jaldi messages. 1 minute ruko.':
+      e.message.startsWith('API:')?'⚠️ Groq error: '+e.message.slice(4):'⚠️ Server se connect nahi hua. Render free plan so jata hai, 1 minute baad try karo.';
+      bd.textContent=m;c.messages.pop()}
+  }finally{ctrl=null;$('send').style.display='';$('stop').style.display='none';save()}
+}
+$('inp').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&innerWidth>760){e.preventDefault();send()}});
+$('inp').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=e.target.scrollHeight+'px'});
+
+// ---- Model status ----
+async function status(){const d=$('dot'),t=$('stxt');
+  try{const s=await(await fetch('/api/status')).json();d.className='dot '+(s.groq?'on':'off');t.textContent=s.groq?'Model ON · '+s.model:'Model OFF (Groq down / key galat)'}
+  catch{d.className='dot wait';t.textContent='Server jag raha hai... (30-60 sec)'}}
+
+window.onload=()=>{showProfs();status();setInterval(status,30000);
+  const u=localStorage.getItem('deft_user'),p=localStorage.getItem('deft_code');
+  if(u&&p!==null){user=u;code=p;$('lu').value=u;start()}};
+</script></body></html>
