@@ -110,7 +110,7 @@ textarea{flex:1;background:none;border:none;outline:none;color:var(--tx);font:in
     <div id="pend"></div>
     <div id="row">
       <button class="ib" onclick="$('file').click()" title="Image / file"><i data-i="clip"></i></button>
-      <button id="srch" class="tg on" onclick="toggleSearch()" title="Wikipedia/web se padh ke jawab"><i data-i="globe"></i> Sources</button>
+      <button id="srch" class="tg on" onclick="toggleSearch()" title="Poore web se live search"><i data-i="globe"></i> Web</button>
       <button id="mic" class="ib" onclick="mic()" title="Bol ke poochho"><i data-i="mic"></i></button>
       <input type="file" id="file" multiple hidden accept="image/*,.txt,.md,.csv,.json,.js,.py,.html,.css,.java,.c,.cpp,.xml,.log,.pdf">
       <textarea id="inp" rows="1" placeholder="DeftAI se kuch bhi poochho..."></textarea>
@@ -184,7 +184,7 @@ function addMsg(m){const d=document.createElement('div');
   else{d.className='m b';paint(d,m.content,m.sources)}
   $('msgs').appendChild(d);$('chat').scrollTop=1e9;return d}
 function renderMsgs(){const w=$('msgs');w.innerHTML='';const c=getChat();
-  if(!c.messages.length)w.innerHTML='<div id="empty"><div class="orb">'+ic('logo')+'</div><h1>Namaste, '+esc(user)+'</h1><p>Main DeftAI hoon, FyreDeft ka banaya hua. Wikipedia aur web se padh kar jawab deta hoon.</p><div class="sug">'+SUG.map(t=>'<button onclick="ask(this.textContent)">'+t+'</button>').join('')+'</div></div>';
+  if(!c.messages.length)w.innerHTML='<div id="empty"><div class="orb">'+ic('logo')+'</div><h1>Namaste, '+esc(user)+'</h1><p>Main DeftAI hoon, FyreDeft ka banaya hua. Poore web se live padh kar jawab deta hoon.</p><div class="sug">'+SUG.map(t=>'<button onclick="ask(this.textContent)">'+t+'</button>').join('')+'</div></div>';
   else{c.messages.forEach(addMsg);actions(c)}}
 
 function actions(c){
@@ -251,7 +251,7 @@ async function go(){
     while(true){const{done,value}=await rd.read();if(done)break;buf+=dc.decode(value,{stream:true});
       const lines=buf.split('\n');buf=lines.pop();
       for(const l of lines){const t=l.trim();if(!t.startsWith('data:'))continue;const d=t.slice(5).trim();if(d==='[DONE]')continue;
-        let j;try{j=JSON.parse(d)}catch{continue}if(j.error)throw new Error('API:'+j.error);if(j.status&&!full)bd.innerHTML=TYP+'<small class="stt">'+esc(j.status)+'</small>';if(j.sources)srcs=j.sources;const x=j.choices?.[0]?.delta?.content;if(x){full+=x;paint(bd,full);$('chat').scrollTop=1e9}}}
+        let j;try{j=JSON.parse(d)}catch{continue}if(j.error)throw new Error('API:'+j.error);if(j.status&&!full)bd.innerHTML=TYP+'<small class="stt">'+esc(j.status)+'</small>';if(j.sources)srcs=j.sources;const x=j.choices?.[0]?.delta?.content;if(x){full+=x;if(clean(full))paint(bd,full);$('chat').scrollTop=1e9}}}
     paint(bd,full,srcs);c.messages.push({role:'assistant',content:full,sources:srcs});actions(c);
   }catch(e){
     if(e.name==='AbortError'){if(full)c.messages.push({role:'assistant',content:full+' _[stopped]_'});paint(bd,full+' _[stopped]_',srcs)}
