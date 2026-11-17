@@ -284,7 +284,7 @@ async function getUserPreferences(username){return {nickname:'',tone:'natural',a
 app.get('/api/preferences',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});res.json(await getUserPreferences(u));}));
 app.put('/api/preferences',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const b=req.body||{};
- const prefs={nickname:String(b.nickname||'').trim().slice(0,40),tone:['natural','concise','detailed','stepwise'].includes(b.tone)?b.tone:'natural',about:String(b.about||'').trim().slice(0,1200),instructions:String(b.instructions||'').trim().slice(0,1600),language:['auto','en','hi','pa','hinglish'].includes(b.language)?b.language:'auto',voiceLang:['en-IN','hi-IN','pa-IN'].includes(b.voiceLang)?b.voiceLang:'en-IN'};
+ const prefs={nickname:String(b.nickname||'').trim().slice(0,40),tone:['natural','concise','detailed','stepwise'].includes(b.tone)?b.tone:'natural',about:'',instructions:String(b.instructions||'').trim().slice(0,1600),language:['auto','en','hi','pa','hinglish'].includes(b.language)?b.language:'auto',voiceLang:['en-IN','hi-IN','pa-IN'].includes(b.voiceLang)?b.voiceLang:'en-IN'};
  await kvSet('prefs:'+u,prefs);res.json({ok:true});
 }));
 
@@ -328,7 +328,7 @@ app.post('/api/chat', async (req, res) => {
     const lastText = typeof last?.content === 'string' ? last.content : (last?.content || []).find(p => p.type === 'text')?.text || '';
     const settings = await getSettings();
     const preferences = await getUserPreferences(who(req));
-    const personalContext = [preferences.nickname?'Preferred name: '+preferences.nickname:'',preferences.about?'User context: '+preferences.about:'',preferences.instructions?'User custom instructions: '+preferences.instructions:'','Preferred answer style: '+({natural:'natural',concise:'concise',detailed:'detailed',stepwise:'step-by-step'}[preferences.tone]||'natural'),'Preferred language: '+({auto:'Auto-detect',en:'English',hi:'Hindi',pa:'Punjabi (Gurmukhi script)',hinglish:'Hinglish'}[preferences.language]||'Auto-detect'),preferences.language==='pa'?'Punjabi mode is ON: answer in fluent Punjabi using Gurmukhi script, not Hindi. Preserve code and technical names.':''].filter(Boolean).join('\n');
+    const personalContext = [preferences.nickname?'Preferred name: '+preferences.nickname:'',preferences.about?'User context: '+preferences.about:'',preferences.instructions?'User custom instructions: '+preferences.instructions:'','IMPORTANT PERSONALIZATION — follow these user preferences in every answer: response style is '+({natural:'balanced and natural',concise:'short and direct',detailed:'detailed with explanations',stepwise:'step-by-step'}[preferences.tone]||'balanced and natural')+'. Preferred response language: '+({auto:'match the language of the latest user message',en:'English',hi:'Hindi',pa:'Punjabi written in Gurmukhi script',hinglish:'Hinglish'}[preferences.language]||'match the latest user message')+'.',preferences.nickname?'Address the user as '+preferences.nickname+' when natural.':'',preferences.instructions?'User instructions (follow unless unsafe or conflicting): '+preferences.instructions:'',preferences.language==='pa'?'MANDATORY: respond in natural Punjabi using Gurmukhi script. Do not answer in Hindi. Keep code, product names and technical terms as needed.':''].filter(Boolean).join('\n');
     const docs = !hasImg ? await retrieveKnowledge(lastText) : [];
     let found = [];
     if (!hasImg && lastText.trim().length > 3) {
