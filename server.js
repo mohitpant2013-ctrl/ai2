@@ -160,6 +160,7 @@ async function research(q, domains = []) {
 }
 
 
+const h = f => (req, res) => f(req, res).catch(e => { console.error(e); if (!res.headersSent) res.status(500).json({ error: 'Server error' }); });
 function adminToken(req) {
   const [b, sig] = (req.get('authorization') || '').replace('Bearer ', '').split('.');
   if (!b || !sig) return false;
@@ -243,7 +244,7 @@ const limited = ip => {
   return a.length > 20;
 };
 
-const h = f => (req, res) => f(req, res).catch(e => { console.error(e); if (!res.headersSent) res.status(500).json({ error: 'Server error' }); });
+
 const NAME = /^[a-zA-Z0-9_.]{3,20}$/;
 const ah = new Map();
 const authLimited = ip => { const n = Date.now(), a = (ah.get(ip) || []).filter(t => n - t < 60000); a.push(n); ah.set(ip, a); return a.length > 10; };
@@ -312,11 +313,25 @@ app.post('/api/chat', async (req, res) => {
     const lastText = typeof last?.content === 'string' ? last.content : (last?.content || []).find(p => p.type === 'text')?.text || '';
     const settings = await getSettings();
     const docs = !hasImg ? await retrieveKnowledge(lastText) : [];
-    if (docs.length) {
-      send({ sources: docs.map(d => ({ title: d.title, url: d.url || '' })) });
-      srcText = docs.map((d,i) => `[${i+1}] ${d.title}${d.url ? ' ('+d.url+')' : ''}\\n${d.content.slice(0,9000)}`).join('\\n\\n');
+    let found = [];
+    if (!hasImg && lastText.trim().length > 3) {
+      const [q, pages] = await Promise.all([
+        makeQuery(history, lastText),
+        readUrls(findUrls(lastText), send)
+      ]);
+      found = [...pages];
+      if (q) {
+        send({ status: 'Searching the internet for relevant information...' });
+        found = [...found, ...(await research(q, hint(lastText)))];
+      }
     }
-    if (!docs.length && !hasImg) send({ status: 'No matching curated documents; answering from model knowledge.' });
+    const combined = [...docs.map(d => ({ title: d.title, url: d.url || '', text: d.content })), ...found];
+    const unique = [...new Map(combined.filter(x => x.text).map(x => [x.url || x.title, x])).values()].slice(0, 8);
+    if (unique.length) {
+      send({ sources: unique.map(({ title, url }) => ({ title, url })) });
+      srcText = unique.map((x,i) => `[${i+1}] ${x.title}${x.url ? ' ('+x.url+')' : ''}\\n${String(x.text).slice(0,4000)}`).join('\\n\\n');
+    }
+    if (!unique.length && !hasImg) send({ status: 'No matching web pages or knowledge documents found; answering from model knowledge.' });
     const activeModel = settings.model || MODEL;
     const maxTokens = Math.max(256, Math.min(900, Number(settings.maxCompletionTokens) || 900));
     const activeVision = settings.visionModel || activeModel;
