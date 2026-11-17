@@ -180,10 +180,11 @@ body,#main,#side,#auth,#main{background:#000!important}
 </aside>
 <div class="settingsContent">
 <header class="settingsTop"><div><div class="settingsEyebrow">DEFT AI / PREFERENCES</div><h1 id="settingsTitle">General</h1></div><button class="settingsClose" onclick="closeSettings()" aria-label="Close settings">✕</button></header>
-<div id="paneGeneral" class="setPane">
-<h2>General</h2><p>Choose how DeftAI behaves by default.</p>
+<div id="paneGeneral" class="setPane"><h2>General</h2><p>Choose how DeftAI behaves by default.</p>
 <label>Default response mode</label><select id="prefMode"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select>
-</div>
+<label>Response language</label><select id="prefLanguage"><option value="auto">Automatic (match my message)</option><option value="en">English</option><option value="hi">Hindi</option><option value="pa">Punjabi</option><option value="hinglish">Hinglish</option></select>
+<label>Voice narrator language</label><select id="prefVoice"><option value="en-IN">English (India)</option><option value="hi-IN">Hindi</option><option value="pa-IN">Punjabi</option></select>
+<div class="settingChoice"><b>Display size</b><span>Auto adapts to phones, laptops, desktops and TVs.</span><select id="prefDisplay"><option value="auto">Automatic</option><option value="compact">Compact</option><option value="tv">Large screen / TV</option></select></div></div>
 <div id="panePersonal" class="setPane" hidden>
 <h2>Personalization</h2><p>Adjust how DeftAI responds to you.</p>
 <label>Preferred name</label><input id="prefNickname" maxlength="40" placeholder="What should DeftAI call you?">
@@ -192,7 +193,7 @@ body,#main,#side,#auth,#main{background:#000!important}
 <label>Custom instructions</label><textarea id="prefInstructions" maxlength="1600" placeholder="How should DeftAI respond?"></textarea>
 <p class="setNote">Saved to your DeftAI account. Avoid passwords or highly sensitive information.</p>
 </div>
-<div id="paneAppearance" class="setPane" hidden><h2>Appearance</h2><p>Customize the look of DeftAI.</p><div class="settingChoice"><b>Theme</b><span>Pure black</span><small>Static theme · always enabled</small></div><div class="settingChoice"><b>Accent</b><span>Monochrome</span><small>Minimal black and white interface</small></div></div>
+<div id="paneAppearance" class="setPane" hidden><h2>Appearance</h2><p>Pure-black background with colourful accent choices.</p><label>Accent colour</label><select id="prefAccent"><option value="violet">Electric violet</option><option value="cyan">Cyan</option><option value="blue">Ocean blue</option><option value="green">Emerald</option><option value="orange">Flame orange</option><option value="rose">Rose</option><option value="gold">Gold</option><option value="rainbow">Rainbow</option><option value="mono">Monochrome</option></select><div class="settingChoice"><b>Colour preview</b><div class="accentPreview"><i style="background:#a78bfa"></i><i style="background:#22d3ee"></i><i style="background:#60a5fa"></i><i style="background:#34d399"></i><i style="background:#fb923c"></i><i style="background:#fb7185"></i><i style="background:#facc15"></i></div><small>Background remains pure black.</small></div></div>
 <div id="paneData" class="setPane" hidden><h2>Data controls</h2><p>Manage your chats and account data.</p><div class="settingChoice"><b>Export current conversation</b><small>Download this chat as a Markdown file.</small><button onclick="closeSettings();exportChat()">Export chat</button></div><div class="settingChoice"><b>Chat storage</b><small>Chats are saved to your DeftAI account when the server storage is available.</small></div></div>
 <div id="paneAbout" class="setPane" hidden><h2>About DeftAI</h2><p>DeftAI · built by FyreDeft.</p><div class="settingChoice"><b>Version</b><span>Web edition</span></div><div class="settingChoice"><b>Owner console</b><a href="/control">Open admin panel ↗</a></div></div>
 <footer class="settingsFooter"><span id="settingsMsg" class="setNote"></span><div><button onclick="closeSettings()">Cancel</button><button class="pri" onclick="savePreferences()">Save changes</button></div></footer>
@@ -205,13 +206,15 @@ const $=id=>document.getElementById(id);
 const ic=n=>'<svg class="ic"><use href="#i-'+n+'"/></svg>';
 let user=null,code='',chats=[],cur=null,pend=[],ctrl=null;
 const key=()=>'deft_chats_'+user;
-let userPrefs={nickname:'',tone:'natural',about:'',instructions:''};
+let userPrefs={nickname:'',tone:'natural',about:'',instructions:'',language:'auto',voiceLang:'en-IN'};
 function scrollChat(){const el=$('chat');if(el)requestAnimationFrame(()=>el.scrollTo({top:el.scrollHeight,behavior:'auto'}))}
 const clean=s=>s.replace(/<think>[\s\S]*?(<\/think>|$)/g,'').trim();
 const md=s=>DOMPurify.sanitize(marked.parse(clean(s)));
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const TYP='<span class="typing"><i></i><i></i><i></i></span>';
 const SUG=['Mughal empire ka itihaas short mein batao','Chandrayaan-3 ke baare mein batao','Black holes kaise bante hain?','Python mein fibonacci likho'];
+function applyAccent(){const p={violet:['#a78bfa','#fb7185'],cyan:['#22d3ee','#60a5fa'],blue:['#60a5fa','#818cf8'],green:['#34d399','#a3e635'],orange:['#fb923c','#f43f5e'],rose:['#fb7185','#c084fc'],gold:['#facc15','#fb923c'],rainbow:['#a78bfa','#22d3ee'],mono:['#eee','#888']}[localStorage.getItem('deft_accent')||'violet'];if(p){document.documentElement.style.setProperty('--ac',p[0]);document.documentElement.style.setProperty('--ac2',p[1]);}}
+function applyDisplay(){document.body.classList.toggle('tv-mode',localStorage.getItem('deft_display')==='tv');document.body.classList.toggle('compact-mode',localStorage.getItem('deft_display')==='compact');}
 const ask=t=>{$('inp').value=t;send()};
 function paint(d,t,src){
   d.innerHTML=md(t)+(src&&src.length?'<div class="src">'+src.filter(x=>/^https?:\/\//.test(x.url)).map((x,i)=>`<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">[${i+1}] ${esc(x.title.slice(0,38))}</a>`).join('')+'</div>':'');
@@ -271,12 +274,26 @@ function actions(c){
     if(m.role==='user')d.appendChild(mk(ic('edit'),'Edit karo',()=>{if(ctrl)return;$('inp').value=m.shown??m.content;c.messages.splice(i);save();renderMsgs();$('inp').focus()}));
     else{const bar=document.createElement('div');bar.className='acts';
       bar.appendChild(mk(ic('copy'),'Copy',e=>{const t=e.currentTarget;navigator.clipboard.writeText(clean(m.content));t.innerHTML=ic('check');setTimeout(()=>t.innerHTML=ic('copy'),1200)}));
-      bar.appendChild(mk(ic('volume'),'Suno',()=>{if(speechSynthesis.speaking){speechSynthesis.cancel();return}const u=new SpeechSynthesisUtterance(clean(m.content).replace(/[#*`_>\[\]]/g,''));u.lang='en-IN';speechSynthesis.speak(u)}));
+      bar.appendChild(mk(ic('volume'),'Suno / narrator',()=>speakText(m.content)));
+      bar.appendChild(mk(ic('download'),'Download .md',()=>downloadAnswer(m.content,'md')));
+      bar.appendChild(mk(ic('file'),'Download .txt',()=>downloadAnswer(m.content,'txt')));
       if(i===c.messages.length-1)bar.appendChild(mk(ic('refresh'),'Dobara likho',()=>{if(ctrl)return;c.messages.splice(i);save();renderMsgs();go()}));
       d.appendChild(bar)}})}
+function voiceLanguage(){return userPrefs.voiceLang||'en-IN'}
+function speakText(text){
+ if(!('speechSynthesis' in window))return alert('Narrator is not supported in this browser.');
+ if(speechSynthesis.speaking){speechSynthesis.cancel();return}
+ const u=new SpeechSynthesisUtterance(clean(String(text)).replace(/[#*`_>\[\]]/g,''));
+ const lang=voiceLanguage();u.lang=lang;const voices=speechSynthesis.getVoices(),prefix=lang.toLowerCase().split('-')[0];
+ u.voice=voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())||voices.find(v=>v.lang.toLowerCase().startsWith(prefix))||null;speechSynthesis.speak(u);
+}
+function downloadAnswer(content,ext){
+ const blob=new Blob([clean(String(content))],{type:ext==='md'?'text/markdown;charset=utf-8':'text/plain;charset=utf-8'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='deftai-answer.'+ext;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
 function mic(){const R=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!R)return alert('Voice ke liye Chrome use karo');
-  const r=new R(),b=$('mic');r.lang='en-IN';r.interimResults=false;b.classList.add('rec');
+  if(!R)return alert('Voice input is not supported here. Try Chrome or Edge.');
+  const r=new R(),b=$('mic');r.lang=voiceLanguage();r.interimResults=false;b.classList.add('rec');
   r.onresult=e=>{const i=$('inp');i.value+=(i.value?' ':'')+e.results[0][0].transcript};
   r.onend=r.onerror=()=>b.classList.remove('rec');r.start()}
 function exportChat(){const c=getChat();if(!c||!c.messages.length)return alert('Chat khaali hai');
@@ -350,6 +367,8 @@ async function loadPreferences(){
  $('prefMode').value=localStorage.getItem('deft_mode')||'';
  $('prefNickname').value=userPrefs.nickname||'';$('prefTone').value=userPrefs.tone||'natural';
  $('prefAbout').value=userPrefs.about||'';$('prefInstructions').value=userPrefs.instructions||'';
+ $('prefLanguage').value=userPrefs.language||'auto';$('prefVoice').value=userPrefs.voiceLang||'en-IN';
+ $('prefDisplay').value=localStorage.getItem('deft_display')||'auto';$('prefAccent').value=localStorage.getItem('deft_accent')||'violet';applyAccent();applyDisplay();
 }
 function openSettings(){settingsTab('general');$('settingsMsg').textContent='';loadPreferences();$('settingsModal').classList.add('open')}
 function closeSettings(){$('settingsModal').classList.remove('open')}
@@ -361,14 +380,28 @@ function settingsTab(t){
  $('settingsTitle').textContent=names[t]||'Settings';
 }
 async function savePreferences(){
- const body={nickname:$('prefNickname').value.trim(),tone:$('prefTone').value,about:$('prefAbout').value.trim(),instructions:$('prefInstructions').value.trim()};
+ const body={nickname:$('prefNickname').value.trim(),tone:$('prefTone').value,about:$('prefAbout').value.trim(),instructions:$('prefInstructions').value.trim(),language:$('prefLanguage').value,voiceLang:$('prefVoice').value};
  try{const r=await api('/api/preferences',{method:'PUT',body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw Error(j.error||'Save failed');
- userPrefs=body;localStorage.setItem('deft_mode',$('prefMode').value);$('mode').value=$('prefMode').value;$('settingsMsg').textContent='Saved successfully.'}
+ userPrefs=body;localStorage.setItem('deft_mode',$('prefMode').value);localStorage.setItem('deft_accent',$('prefAccent').value);localStorage.setItem('deft_display',$('prefDisplay').value);$('mode').value=$('prefMode').value;applyAccent();applyDisplay();$('settingsMsg').textContent='Saved successfully.'}
  catch(e){$('settingsMsg').textContent=e.message}
 }
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeSettings()});
 
 window.onload=()=>{document.querySelectorAll('i[data-i]').forEach(e=>e.outerHTML=ic(e.dataset.i));
-  $('mode').value=localStorage.getItem('deft_mode')||'';status();setInterval(status,30000);
+  applyAccent();applyDisplay();$('mode').value=localStorage.getItem('deft_mode')||'';status();setInterval(status,30000);
   user=localStorage.getItem('deft_user')||'';if(token&&user){start();loadPreferences()}};
 </script></body></html>
+<style>
+#settingsModal.open{display:flex!important;align-items:stretch!important;justify-content:stretch!important;padding:0!important;background:#000!important}
+#settingsCard{width:100%!important;height:100dvh!important;max-height:none!important;max-width:none!important;border:0!important;border-radius:0!important;padding:0!important;display:grid!important;grid-template-columns:260px minmax(0,1fr)!important;overflow:hidden!important;background:#000!important}
+.settingsContent{width:100%;max-width:1050px!important}.accentPreview{display:flex;gap:9px;flex-wrap:wrap;padding:8px 0}.accentPreview i{width:26px;height:26px;border-radius:50%;display:block;box-shadow:0 0 0 3px #222}
+.setPane select,.setPane input,.setPane textarea{accent-color:var(--ac)}.settingNavItem.on{border-left:3px solid var(--ac)!important}
+#bar:focus-within{border-color:var(--ac)!important}.b a{color:var(--ac)!important}.tg.on{color:var(--ac)!important;border-color:var(--ac)!important}
+.logo,.orb,.b::before{background:linear-gradient(135deg,var(--ac2),var(--ac))!important}
+.tv-mode{font-size:19px}.tv-mode #side{width:320px}.tv-mode #chat{padding-left:5vw;padding-right:5vw}.tv-mode #bar{max-width:1100px}.tv-mode #inp{font-size:19px;min-height:56px}.tv-mode button{padding:12px 16px}
+.compact-mode{font-size:13px}.compact-mode #side{width:230px}.compact-mode #chat{padding-top:4px}
+@media(min-width:1500px){#side{width:300px}#chat{padding-left:32px;padding-right:32px}.wrap{max-width:900px}}
+@media(max-width:760px){#settingsCard{grid-template-columns:66px minmax(0,1fr)!important}.settingsNav{padding:18px 7px!important}.settingsBrand{padding:0 7px 25px!important}.settingsBrand>div,.settingsNavLabel,.settingNavItem span,.settingsNavBottom span{display:none!important}.settingNavItem{justify-content:center;padding:12px 5px!important}.settingsContent{padding:22px 17px!important}#chat{padding-left:10px;padding-right:10px}#box{padding-left:8px;padding-right:8px}.u{max-width:94%}}
+@media(max-width:420px){.settingsTop h1{font-size:20px}.settingsContent{padding:16px 12px!important}.settingsFooter{flex-direction:column;align-items:stretch}.settingsFooter>div{width:100%}.settingsFooter button{flex:1}.sug{grid-template-columns:1fr}}
+@media(orientation:landscape) and (max-height:500px){#top{padding:5px 10px}#box{padding-bottom:4px}#bar{padding:5px}.fine{display:none}}
+</style>
