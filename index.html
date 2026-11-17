@@ -86,6 +86,31 @@ body,#main,#side,#auth,#main{background:#000!important}
 #main{min-height:0;background:#000!important}#chat{min-height:0;overscroll-behavior:contain}
 #bar{background:#080808;box-shadow:none}#bar:focus-within{border-color:#555;box-shadow:0 0 0 2px #222}
 #send,#stop,.pri{background:#eee;color:#000}.tg.on{color:#fff;border-color:#666;background:#171717}.b a{color:#ddd}
+
+#settingsModal{position:fixed;inset:0;z-index:999;background:#000;display:none;padding:0}
+#settingsModal.open{display:flex}
+#settingsCard{width:100%;height:100dvh;max-height:none;max-width:none;border:0;border-radius:0;padding:0;background:#000;display:grid;grid-template-columns:260px minmax(0,1fr);overflow:hidden;box-shadow:none}
+.settingsNav{border-right:1px solid #242424;padding:26px 16px;display:flex;flex-direction:column;min-height:0;background:#050505}
+.settingsBrand{display:flex;align-items:center;gap:11px;padding:0 10px 30px}.settingsBrand .logo{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:#181818}
+.settingsBrand b,.settingsBrand small{display:block}.settingsBrand small{color:#888;font-size:12px;margin-top:2px}
+.settingsNavLabel{font-size:10px;letter-spacing:1.3px;color:#777;padding:12px 10px 7px}
+.settingNavItem{display:flex;align-items:center;gap:12px;text-align:left;width:100%;padding:11px 12px;border:0;border-radius:9px;background:transparent;color:#aaa;font-size:14px;margin:2px 0}
+.settingNavItem:hover,.settingNavItem.on{background:#1b1b1b;color:#fff}
+.settingsNavBottom{margin-top:auto;border-top:1px solid #222;padding-top:14px}.settingsNavBottom button{width:100%;text-align:left;background:transparent;color:#bbb;border:0;padding:10px}
+.settingsContent{overflow:auto;padding:38px clamp(22px,6vw,88px);max-width:1000px;width:100%;margin:0 auto}
+.settingsTop{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222;padding-bottom:22px;margin-bottom:28px}
+.settingsEyebrow{font-size:10px;letter-spacing:1.4px;color:#777;margin-bottom:8px}.settingsTop h1{font-size:26px;margin:0;color:#fff}
+.settingsClose{background:#151515;color:#ddd;border:1px solid #303030;border-radius:9px;padding:8px 12px}
+.setPane{max-width:680px}.setPane h2{font-size:19px;margin:0 0 8px}.setPane>p{color:#888;font-size:13px;margin:0 0 24px}
+.setPane label{display:block;color:#ccc;font-size:13px;margin:20px 0 7px}
+.setPane input,.setPane textarea,.setPane select{width:100%;max-width:540px;background:#080808;color:#fff;border:1px solid #333;border-radius:9px;padding:12px;font:inherit}
+.setPane textarea{min-height:100px;resize:vertical}
+.settingChoice{border:1px solid #292929;border-radius:12px;padding:16px;margin:14px 0;display:flex;flex-direction:column;gap:8px;max-width:540px}
+.settingChoice b{font-size:14px}.settingChoice span,.settingChoice small{color:#999;font-size:13px}.settingChoice a{color:#ddd}
+.settingsFooter{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #222;padding:18px 0;margin-top:30px;max-width:680px}
+.settingsFooter>div{display:flex;gap:8px}.settingsFooter button{padding:10px 14px;border-radius:8px}
+@media(max-width:680px){#settingsCard{grid-template-columns:66px minmax(0,1fr)}.settingsNav{padding:18px 7px}.settingsBrand{padding:0 7px 25px}.settingsBrand>div,.settingsNavLabel,.settingNavItem span,.settingsNavBottom span{display:none}.settingNavItem{justify-content:center;padding:12px 5px;font-size:17px}.settingsNavBottom button{text-align:center;padding:12px 0}.settingsContent{padding:22px 17px}.settingsTop h1{font-size:22px}.settingsFooter{align-items:flex-start;gap:8px;flex-direction:column}}
+
 #settingsModal{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.84);display:none;align-items:center;justify-content:center;padding:16px}
 #settingsModal.open{display:flex}#settingsCard{width:min(560px,100%);max-height:92dvh;overflow:auto;background:#080808;border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 24px 80px #000}
 .setHead{display:flex;align-items:center;justify-content:space-between}.setTabs{display:flex;gap:8px;border-bottom:1px solid #252525;margin:16px 0}
@@ -140,23 +165,38 @@ body,#main,#side,#auth,#main{background:#000!important}
 </div>
 
 
-<div id="settingsModal" onclick="if(event.target===this)closeSettings()">
-<section id="settingsCard" role="dialog" aria-modal="true">
-<div class="setHead"><h2>Settings</h2><button onclick="closeSettings()">✕</button></div>
-<div class="setTabs"><button id="tabGeneral" class="on" onclick="settingsTab('general')">General</button><button id="tabPersonal" onclick="settingsTab('personal')">Personalization</button></div>
+<div id="settingsModal">
+<section id="settingsCard" role="dialog" aria-modal="true" aria-label="Settings">
+<aside class="settingsNav">
+<div class="settingsBrand"><span class="logo">🔥</span><div><b>DeftAI</b><small>Settings</small></div></div>
+<div class="settingsNavLabel">PREFERENCES</div>
+<button class="settingNavItem on" data-tab="general" onclick="settingsTab('general')">⚙ <span>General</span></button>
+<button class="settingNavItem" data-tab="personal" onclick="settingsTab('personal')">✦ <span>Personalization</span></button>
+<button class="settingNavItem" data-tab="appearance" onclick="settingsTab('appearance')">◐ <span>Appearance</span></button>
+<div class="settingsNavLabel">ACCOUNT</div>
+<button class="settingNavItem" data-tab="data" onclick="settingsTab('data')">▤ <span>Data controls</span></button>
+<button class="settingNavItem" data-tab="about" onclick="settingsTab('about')">ⓘ <span>About</span></button>
+<div class="settingsNavBottom"><button onclick="closeSettings()">← <span>Back to chat</span></button></div>
+</aside>
+<div class="settingsContent">
+<header class="settingsTop"><div><div class="settingsEyebrow">DEFT AI / PREFERENCES</div><h1 id="settingsTitle">General</h1></div><button class="settingsClose" onclick="closeSettings()" aria-label="Close settings">✕</button></header>
 <div id="paneGeneral" class="setPane">
+<h2>General</h2><p>Choose how DeftAI behaves by default.</p>
 <label>Default response mode</label><select id="prefMode"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select>
-<label>Theme</label><input value="Pure black (fixed)" disabled><p>Static pure-black interface.</p>
 </div>
 <div id="panePersonal" class="setPane" hidden>
-<label>Preferred name (optional)</label><input id="prefNickname" maxlength="40" placeholder="What should DeftAI call you?">
+<h2>Personalization</h2><p>Adjust how DeftAI responds to you.</p>
+<label>Preferred name</label><input id="prefNickname" maxlength="40" placeholder="What should DeftAI call you?">
 <label>Response style</label><select id="prefTone"><option value="natural">Natural</option><option value="concise">Concise</option><option value="detailed">Detailed</option><option value="stepwise">Step-by-step</option></select>
-<label>About you (optional)</label><textarea id="prefAbout" maxlength="1200" placeholder="Interests, projects, or useful context..."></textarea>
+<label>About you</label><textarea id="prefAbout" maxlength="1200" placeholder="Interests, projects, or useful context..."></textarea>
 <label>Custom instructions</label><textarea id="prefInstructions" maxlength="1600" placeholder="How should DeftAI respond?"></textarea>
-<p class="setNote">Saved to your DeftAI account. Do not enter passwords or highly sensitive information.</p>
+<p class="setNote">Saved to your DeftAI account. Avoid passwords or highly sensitive information.</p>
 </div>
-<div class="setActions"><button onclick="closeSettings()">Cancel</button><button class="pri" onclick="savePreferences()">Save settings</button></div><div id="settingsMsg" class="setNote"></div>
-</section></div>
+<div id="paneAppearance" class="setPane" hidden><h2>Appearance</h2><p>Customize the look of DeftAI.</p><div class="settingChoice"><b>Theme</b><span>Pure black</span><small>Static theme · always enabled</small></div><div class="settingChoice"><b>Accent</b><span>Monochrome</span><small>Minimal black and white interface</small></div></div>
+<div id="paneData" class="setPane" hidden><h2>Data controls</h2><p>Manage your chats and account data.</p><div class="settingChoice"><b>Export current conversation</b><small>Download this chat as a Markdown file.</small><button onclick="closeSettings();exportChat()">Export chat</button></div><div class="settingChoice"><b>Chat storage</b><small>Chats are saved to your DeftAI account when the server storage is available.</small></div></div>
+<div id="paneAbout" class="setPane" hidden><h2>About DeftAI</h2><p>DeftAI · built by FyreDeft.</p><div class="settingChoice"><b>Version</b><span>Web edition</span></div><div class="settingChoice"><b>Owner console</b><a href="/control">Open admin panel ↗</a></div></div>
+<footer class="settingsFooter"><span id="settingsMsg" class="setNote"></span><div><button onclick="closeSettings()">Cancel</button><button class="pri" onclick="savePreferences()">Save changes</button></div></footer>
+</div></section></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -313,7 +353,13 @@ async function loadPreferences(){
 }
 function openSettings(){settingsTab('general');$('settingsMsg').textContent='';loadPreferences();$('settingsModal').classList.add('open')}
 function closeSettings(){$('settingsModal').classList.remove('open')}
-function settingsTab(t){const p=t==='personal';$('paneGeneral').hidden=p;$('panePersonal').hidden=!p;$('tabGeneral').classList.toggle('on',!p);$('tabPersonal').classList.toggle('on',p)}
+function settingsTab(t){
+ const tabs=['general','personal','appearance','data','about'];
+ tabs.forEach(k=>{const pane=$('pane'+k[0].toUpperCase()+k.slice(1));if(pane)pane.hidden=k!==t});
+ document.querySelectorAll('.settingNavItem').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+ const names={general:'General',personal:'Personalization',appearance:'Appearance',data:'Data controls',about:'About DeftAI'};
+ $('settingsTitle').textContent=names[t]||'Settings';
+}
 async function savePreferences(){
  const body={nickname:$('prefNickname').value.trim(),tone:$('prefTone').value,about:$('prefAbout').value.trim(),instructions:$('prefInstructions').value.trim()};
  try{const r=await api('/api/preferences',{method:'PUT',body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw Error(j.error||'Save failed');
