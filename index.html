@@ -276,8 +276,8 @@ function actions(c){
     else{const bar=document.createElement('div');bar.className='acts';
       bar.appendChild(mk(ic('copy'),'Copy',e=>{const t=e.currentTarget;navigator.clipboard.writeText(clean(m.content));t.innerHTML=ic('check');setTimeout(()=>t.innerHTML=ic('copy'),1200)}));
       bar.appendChild(mk(ic('volume'),'Suno / narrator',()=>speakText(m.content)));
+      bar.appendChild(mk(ic('file'),'Create / save file',()=>createFileFromAnswer(m.content)));
       bar.appendChild(mk(ic('download'),'Download .md',()=>downloadAnswer(m.content,'md')));
-      bar.appendChild(mk(ic('file'),'Download .txt',()=>downloadAnswer(m.content,'txt')));
       if(i===c.messages.length-1)bar.appendChild(mk(ic('refresh'),'Dobara likho',()=>{if(ctrl)return;c.messages.splice(i);save();renderMsgs();go()}));
       d.appendChild(bar)}})}
 function voiceLanguage(){return userPrefs.voiceLang||'en-IN'}
@@ -291,6 +291,20 @@ function speakText(text){
 function downloadAnswer(content,ext){
  const blob=new Blob([clean(String(content))],{type:ext==='md'?'text/markdown;charset=utf-8':'text/plain;charset=utf-8'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='deftai-answer.'+ext;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+function createFileFromAnswer(content){
+ const name=prompt('Save file as (example: notes.md, app.py, data.json):','deftai-output.md');
+ if(!name)return;
+ const ext=(name.split('.').pop()||'txt').toLowerCase();
+ const allowed=['md','txt','json','html','css','js','py','java','csv','xml','yml','yaml','sql','sh'];
+ if(!allowed.includes(ext))return alert('Supported: '+allowed.join(', '));
+ let body=clean(String(content));
+ if(ext!=='md'&&ext!=='txt'){
+   const blocks=[...body.matchAll(/```[^\n]*\n([\s\S]*?)```/g)];
+   if(blocks.length)body=blocks[0][1].trim();
+ }
+ const blob=new Blob([body],{type:ext==='md'?'text/markdown;charset=utf-8':ext==='json'?'application/json;charset=utf-8':'text/plain;charset=utf-8'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name.replace(/[\\/\\\\]/g,'_');a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
 function mic(){const R=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!R)return alert('Voice input is not supported here. Try Chrome or Edge.');
