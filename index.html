@@ -270,12 +270,19 @@ async function authGo(){const b=$('abtn');$('aerr').textContent='';
   if(amode==='up'&&!$('legalAgree').checked){$('aerr').textContent='Account banane ke liye Terms aur Privacy Policy accept karo.';return}
   body.legalAccepted=amode==='up'&&$('legalAgree').checked;
   b.disabled=true;
-  try{const r=await fetch('/api/'+(amode==='in'?'login':'register'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const j=await r.json();if(!r.ok){$('aerr').textContent=j.error||'Error';return}
-    token=j.token;user=j.username;localStorage.setItem('deft_token',token);localStorage.setItem('deft_user',user);$('lp').value='';await start()}
-  catch{$('aerr').textContent='Server se connect nahi hua. 1 minute baad try karo.'}finally{b.disabled=false}}
+  try{
+    let r;
+    try{r=await fetch('/api/'+(amode==='in'?'login':'register'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
+    catch(e){throw new Error('Network connection failed: '+e.message)}
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){$('aerr').textContent=j.error||('Server error ('+r.status+').');return}
+    token=j.token;user=j.username;localStorage.setItem('deft_token',token);localStorage.setItem('deft_user',user);$('lp').value='';
+    try{await start()}catch(e){console.error('Post-login startup failed:',e);$('auth').style.display='none';$('aerr').textContent='Login successful, but chat startup failed: '+e.message}
+  }catch(e){console.error('Login request failed:',e);$('aerr').textContent='Could not reach login service. Check your connection and retry.'}
+  finally{b.disabled=false}
+}
 function logout(){token='';localStorage.removeItem('deft_token');chats=[];$('auth').style.display='flex'}
-async function start(){if(!(await load()))return;await loadPreferences();syncPunjabiButton();$('auth').style.display='none';$('uname').textContent=user;$('av').textContent=user[0].toUpperCase();
+async function start(){if(!(await load()))return;await loadPreferences();$('auth').style.display='none';$('uname').textContent=user;$('av').textContent=user[0].toUpperCase();
   if(!chats.length)newChat();else cur=chats[0].id;renderList();renderMsgs();const draft=localStorage.getItem('deft_draft_'+user);if(draft&&!$('inp').value)$('inp').value=draft;
 }
 function newChat(){const c={id:Date.now().toString(36),title:'New chat',messages:[]};chats.unshift(c);cur=c.id}
