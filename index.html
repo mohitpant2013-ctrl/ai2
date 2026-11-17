@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/deft-icon.svg">
 <title>DeftAI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -141,6 +141,7 @@ body,#main,#side,#auth,#main{background:#000!important}
   <button onclick="openSettings()">⚙ Settings & Personalization</button>
   <a href="/control" style="display:flex;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--bd);border-radius:9px;color:var(--mu);text-decoration:none;font-size:14px">⚙ Owner console</a>
   <button onclick="exportChat()"><i data-i="download"></i> Export chat</button>
+  <button id="installApp" onclick="installApp()" style="display:none">⬇ Install DeftAI</button>
   <div class="me"><span id="av">?</span><span id="uname"></span><button class="ib" title="Log out" onclick="logout()"><i data-i="logout"></i></button></div>
 </div>
 
@@ -387,8 +388,12 @@ async function savePreferences(){
 }
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeSettings()});
 
+let installPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('installApp').style.display='inline-flex'});
+async function installApp(){if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('installApp').style.display='none'}
 window.onload=()=>{document.querySelectorAll('i[data-i]').forEach(e=>e.outerHTML=ic(e.dataset.i));
   applyAccent();applyDisplay();$('mode').value=localStorage.getItem('deft_mode')||'';status();setInterval(status,30000);
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
   user=localStorage.getItem('deft_user')||'';if(token&&user){start();loadPreferences()}};
 </script></body></html>
 <style>
