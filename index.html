@@ -137,6 +137,12 @@ body,#main,#side,#auth,#main{background:#000!important}
 
 <div id="side">
   <div class="brand"><span class="logo"><i data-i="logo"></i></span><b>DeftAI<small>by FyreDeft</small></b></div>
+  <section id="projectBox" style="margin:10px 0;padding:11px;border:1px solid var(--bd);border-radius:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:13px">🧠 Project Recall</b><button type="button" class="ib" style="width:auto" onclick="createProject()" title="New project">＋</button></div>
+    <select id="projectSelect" aria-label="Active project" style="width:100%;margin-top:9px"><option value="">No project selected</option></select>
+    <button type="button" onclick="toggleProjectMemory()" style="width:100%;margin-top:7px">Edit project memory</button>
+    <div id="projectEditor" hidden style="margin-top:8px"><input id="projectName" maxlength="60" placeholder="Project name"><textarea id="projectMemory" maxlength="4000" rows="6" placeholder="Decisions, current progress, constraints, next steps..."></textarea><small style="display:block;color:var(--mu);font-size:11px;margin:5px 0">Only notes you save here are used as project memory. Max 4,000 characters.</small><button type="button" onclick="saveProjectMemory()" style="width:100%">Save memory</button><button type="button" class="ib" onclick="deleteProject()" style="width:100%;margin-top:5px;color:#f88">Delete project</button><span id="projectStatus" role="status" style="font-size:11px"></span></div>
+  </section>
   <button id="new" onclick="newChat();renderList();renderMsgs();$('side').classList.remove('open')"><i data-i="plus"></i> New chat</button>
   <input id="chatSearch" type="search" placeholder="⌕ Search chats..." aria-label="Search chats">
   <div id="list"></div>
@@ -265,6 +271,15 @@ async function load(){try{const r=await api('/api/chats');if(r.status===401){log
   if(!chats.length){try{chats=JSON.parse(localStorage.getItem('deft_chats_'+user))||[];if(chats.length)save()}catch{}}return true}
 
 let token=localStorage.getItem('deft_token')||'',amode='in';
+let projects=[],activeProjectId='';
+function activeProject(){return projects.find(p=>p.id===activeProjectId)}
+async function loadProjects(){try{const r=await api('/api/projects');if(!r.ok)return;projects=(await r.json()).projects||[];renderProjects()}catch{}}
+function renderProjects(){const sel=$('projectSelect');if(!sel)return;sel.replaceChildren();const none=document.createElement('option');none.value='';none.textContent='No project selected';sel.append(none);for(const p of projects){const o=document.createElement('option');o.value=p.id;o.textContent=p.name;sel.append(o)}if(!projects.some(p=>p.id===activeProjectId))activeProjectId='';sel.value=activeProjectId;const p=activeProject();$('projectName').value=p?.name||'';$('projectMemory').value=p?.memory||''}
+$('projectSelect')?.addEventListener('change',()=>{activeProjectId=$('projectSelect').value;renderProjects()});
+async function createProject(){const name=prompt('Project ka naam?');if(!name?.trim())return;try{const r=await api('/api/projects',{method:'POST',body:JSON.stringify({name})});const j=await r.json();if(!r.ok)throw Error(j.error);projects=j.projects;activeProjectId=j.project.id;renderProjects();$('projectEditor').hidden=false}catch(e){alert(e.message)}}
+function toggleProjectMemory(){if(!projects.length){createProject();return}$('projectEditor').hidden=!$('projectEditor').hidden;renderProjects()}
+async function saveProjectMemory(){const p=activeProject();if(!p)return;const name=$('projectName').value.trim(),memory=$('projectMemory').value;try{const r=await api('/api/projects/'+encodeURIComponent(p.id),{method:'PUT',body:JSON.stringify({name,memory})});const j=await r.json();if(!r.ok)throw Error(j.error);projects=projects.map(x=>x.id===p.id?j.project:x);renderProjects();$('projectStatus').textContent='Saved ✓'}catch(e){$('projectStatus').textContent=e.message}}
+async function deleteProject(){const p=activeProject();if(!p||!confirm('Delete '+p.name+' and its saved project memory?'))return;try{const r=await api('/api/projects/'+encodeURIComponent(p.id),{method:'DELETE'});if(!r.ok)throw Error('Delete failed');projects=projects.filter(x=>x.id!==p.id);activeProjectId='';renderProjects();$('projectEditor').hidden=true}catch(e){alert(e.message)}}
 function tab(m){amode=m;$('tIn').className=m==='in'?'on':'';$('tUp').className=m==='up'?'on':'';$('linv').style.display=m==='up'?'':'none';$('legalConsent').style.display=m==='up'?'flex':'none';
   $('abtn').textContent=m==='in'?'Sign in':'Create account';$('aerr').textContent='';$('lp').autocomplete=m==='in'?'current-password':'new-password'}
 async function authGo(){const b=$('abtn');$('aerr').textContent='';
@@ -285,7 +300,7 @@ async function authGo(){const b=$('abtn');$('aerr').textContent='';
   finally{b.disabled=false}
 }
 function logout(){token='';localStorage.removeItem('deft_token');chats=[];$('auth').style.display='flex'}
-async function start(){if(!(await load()))return;await loadPreferences();$('auth').style.display='none';$('uname').textContent=user;$('av').textContent=user[0].toUpperCase();
+async function start(){if(!(await load()))return;await loadPreferences();await loadProjects();$('auth').style.display='none';$('uname').textContent=user;$('av').textContent=user[0].toUpperCase();
   if(!chats.length)newChat();else cur=chats[0].id;renderList();renderMsgs();const draft=localStorage.getItem('deft_draft_'+user);if(draft&&!$('inp').value)$('inp').value=draft;
 }
 function newChat(){const c={id:Date.now().toString(36),title:'New chat',messages:[]};chats.unshift(c);cur=c.id}
@@ -404,7 +419,7 @@ async function go(){
       if(i===a.length-1&&Array.isArray(m.imgs)&&m.imgs.length)
         return{role:m.role,content:[{type:'text',text:m.content},...m.imgs.map(u=>({type:'image_url',image_url:{url:u}}))]};
       return{role:m.role,content:m.content}});
-    const r=await fetch('/api/chat',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({messages:msgs,mode:$('mode').value||localStorage.getItem('deft_mode')||''})});
+    const r=await fetch('/api/chat',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({messages:msgs,mode:$('mode').value||localStorage.getItem('deft_mode')||'',projectId:activeProjectId})});
     if(r.status===401){logout();throw new Error('AUTH')};if(r.status===429)throw new Error('RATE');if(!r.ok)throw new Error('API:'+(await r.text()).slice(0,200));
     const rd=r.body.getReader(),dc=new TextDecoder();let buf='';
     while(true){const{done,value}=await rd.read();if(done)break;buf+=dc.decode(value,{stream:true});
