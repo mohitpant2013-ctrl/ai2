@@ -14,21 +14,21 @@ const G = 'https://api.groq.com/openai/v1';
 const UA = { 'User-Agent': 'DeftAI/1.0 (personal chat app)' };
 const crypto = require('crypto');
 const fs = require('fs');
-const RU = process.env.UPSTASH_REDIS_REST_URL, RT = process.env.UPSTASH_REDIS_REST_TOKEN;
 const SECRET = process.env.TOKEN_SECRET || (KEY || '') + PASS + 'deftai';
 
-// Storage: Upstash Redis if configured (permanent), else memory + temp file (resets on redeploy)
+// Simple local JSON storage. No Redis or external database required.
 const FILE = '/tmp/deftai-data.json';
 let mem = {}; try { mem = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
-let wt; const persist = () => { clearTimeout(wt); wt = setTimeout(() => { try { fs.writeFileSync(FILE, JSON.stringify(mem)); } catch {} }, 500); };
-async function kvGet(k) {
-  if (RU) { const j = await (await fetch(`${RU}/get/${encodeURIComponent(k)}`, { headers: { Authorization: 'Bearer ' + RT } })).json(); return j.result ? JSON.parse(j.result) : null; }
-  return mem[k] ?? null;
-}
-async function kvSet(k, v) {
-  if (RU) { await fetch(RU, { method: 'POST', headers: { Authorization: 'Bearer ' + RT }, body: JSON.stringify(['SET', k, JSON.stringify(v)]) }); return; }
-  mem[k] = v; persist();
-}
+let wt;
+const persist = () => {
+  clearTimeout(wt);
+  wt = setTimeout(() => {
+    try { fs.writeFileSync(FILE, JSON.stringify(mem)); }
+    catch (e) { console.error('Local data save failed:', e.message); }
+  }, 300);
+};
+async function kvGet(k) { return mem[k] ?? null; }
+async function kvSet(k, v) { mem[k] = v; persist(); }
 const scrypt = (pw, salt) => new Promise((ok, no) => crypto.scrypt(pw, salt, 32, (e, k) => e ? no(e) : ok(k.toString('hex'))));
 const sign = u => { const b = Buffer.from(u + '|' + (Date.now() + 30 * 864e5)).toString('base64url'); return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url'); };
 function who(req) {
