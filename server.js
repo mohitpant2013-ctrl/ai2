@@ -273,6 +273,15 @@ app.post('/api/login', h(async (req, res) => {
   res.json({ token: sign(username.toLowerCase()), username: u.name });
 }));
 
+
+async function getUserPreferences(username){return {nickname:'',tone:'natural',about:'',instructions:'',...(await kvGet('prefs:'+username)||{})};}
+app.get('/api/preferences',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});res.json(await getUserPreferences(u));}));
+app.put('/api/preferences',h(async(req,res)=>{
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const b=req.body||{};
+ const prefs={nickname:String(b.nickname||'').trim().slice(0,40),tone:['natural','concise','detailed','stepwise'].includes(b.tone)?b.tone:'natural',about:String(b.about||'').trim().slice(0,1200),instructions:String(b.instructions||'').trim().slice(0,1600)};
+ await kvSet('prefs:'+u,prefs);res.json({ok:true});
+}));
+
 app.get('/api/chats', h(async (req, res) => {
   const u = who(req); if (!u) return res.status(401).json({ error: 'Login karo' });
   res.json({ chats: (await kvGet('c:' + u)) || [] });
@@ -312,6 +321,8 @@ app.post('/api/chat', async (req, res) => {
     const last = [...history].reverse().find(m => m.role === 'user');
     const lastText = typeof last?.content === 'string' ? last.content : (last?.content || []).find(p => p.type === 'text')?.text || '';
     const settings = await getSettings();
+    const preferences = await getUserPreferences(who(req));
+    const personalContext = [preferences.nickname?'Preferred name: '+preferences.nickname:'',preferences.about?'User context: '+preferences.about:'',preferences.instructions?'User custom instructions: '+preferences.instructions:'','Preferred answer style: '+({natural:'natural',concise:'concise',detailed:'detailed',stepwise:'step-by-step'}[preferences.tone]||'natural')].filter(Boolean).join('\\n');
     const docs = !hasImg ? await retrieveKnowledge(lastText) : [];
     let found = [];
     if (!hasImg && lastText.trim().length > 3) {
@@ -336,7 +347,7 @@ app.post('/api/chat', async (req, res) => {
     const maxTokens = Math.max(256, Math.min(900, Number(settings.maxCompletionTokens) || 900));
     const activeVision = settings.visionModel || activeModel;
     const r = await groq(
-      { messages: [{ role: 'system', content: sysPrompt(hasImg ? activeVision : activeModel, srcText, req.body.mode, settings.systemPrompt) }, ...history], stream: true, temperature: 0.6, max_completion_tokens: maxTokens },
+      { messages: [{ role: 'system', content: sysPrompt(hasImg ? activeVision : activeModel, srcText, req.body.mode, [settings.systemPrompt,personalContext].filter(Boolean).join('\\n')) }, ...history], stream: true, temperature: 0.6, max_completion_tokens: maxTokens },
       hasImg ? [activeVision] : [...new Set([activeModel, ...FALLBACK])], ctrl.signal, settings.reasoningEffort || 'medium');
     if (!r.ok) { send({ error: (await r.text()).slice(0, 300) }); return res.end(); }
     for await (const c of r.body) res.write(c);
