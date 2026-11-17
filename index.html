@@ -114,6 +114,7 @@ body,#main,#side,#auth,#main{background:#000!important}
   <button id="new" onclick="newChat();renderList();renderMsgs();$('side').classList.remove('open')"><i data-i="plus"></i> New chat</button>
   <div id="list"></div>
   <button onclick="openSettings()">⚙ Settings & Personalization</button>
+  <a href="/control" style="display:flex;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--bd);border-radius:9px;color:var(--mu);text-decoration:none;font-size:14px">⚙ Owner console</a>
   <button onclick="exportChat()"><i data-i="download"></i> Export chat</button>
   <div class="me"><span id="av">?</span><span id="uname"></span><button class="ib" title="Log out" onclick="logout()"><i data-i="logout"></i></button></div>
 </div>
