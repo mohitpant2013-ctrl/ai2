@@ -322,7 +322,7 @@ app.post('/api/chat', async (req, res) => {
     const lastText = typeof last?.content === 'string' ? last.content : (last?.content || []).find(p => p.type === 'text')?.text || '';
     const settings = await getSettings();
     const preferences = await getUserPreferences(who(req));
-    const personalContext = [preferences.nickname?'Preferred name: '+preferences.nickname:'',preferences.about?'User context: '+preferences.about:'',preferences.instructions?'User custom instructions: '+preferences.instructions:'','Preferred answer style: '+({natural:'natural',concise:'concise',detailed:'detailed',stepwise:'step-by-step'}[preferences.tone]||'natural')].filter(Boolean).join('\\n');
+    const personalContext = [preferences.nickname?'Preferred name: '+preferences.nickname:'',preferences.about?'User context: '+preferences.about:'',preferences.instructions?'User custom instructions: '+preferences.instructions:'','Preferred answer style: '+({natural:'natural',concise:'concise',detailed:'detailed',stepwise:'step-by-step'}[preferences.tone]||'natural')].filter(Boolean).join('\n');
     const docs = !hasImg ? await retrieveKnowledge(lastText) : [];
     let found = [];
     if (!hasImg && lastText.trim().length > 3) {
@@ -347,7 +347,7 @@ app.post('/api/chat', async (req, res) => {
     const maxTokens = Math.max(256, Math.min(900, Number(settings.maxCompletionTokens) || 900));
     const activeVision = settings.visionModel || activeModel;
     const r = await groq(
-      { messages: [{ role: 'system', content: sysPrompt(hasImg ? activeVision : activeModel, srcText, req.body.mode, [settings.systemPrompt,personalContext].filter(Boolean).join('\\n')) }, ...history], stream: true, temperature: 0.6, max_completion_tokens: maxTokens },
+      { messages: [{ role: 'system', content: sysPrompt(hasImg ? activeVision : activeModel, srcText, req.body.mode, [settings.systemPrompt,personalContext].filter(Boolean).join('\n')) }, ...history], stream: true, temperature: 0.6, max_completion_tokens: maxTokens },
       hasImg ? [activeVision] : [...new Set([activeModel, ...FALLBACK])], ctrl.signal, settings.reasoningEffort || 'medium');
     if (!r.ok) { send({ error: (await r.text()).slice(0, 300) }); return res.end(); }
     for await (const c of r.body) res.write(c);
