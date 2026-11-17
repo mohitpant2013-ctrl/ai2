@@ -328,7 +328,7 @@ app.post('/api/chat', async (req, res) => {
     const lastText = typeof last?.content === 'string' ? last.content : (last?.content || []).find(p => p.type === 'text')?.text || '';
     const settings = await getSettings();
     const preferences = await getUserPreferences(who(req));
-    const personalContext = [preferences.nickname?'Preferred name: '+preferences.nickname:'',preferences.about?'User context: '+preferences.about:'',preferences.instructions?'User custom instructions: '+preferences.instructions:'','Preferred answer style: '+({natural:'natural',concise:'concise',detailed:'detailed',stepwise:'step-by-step'}[preferences.tone]||'natural'),'Preferred language: '+({auto:'Auto-detect',en:'English',hi:'Hindi',pa:'Punjabi',hinglish:'Hinglish'}[preferences.language]||'Auto-detect')].filter(Boolean).join('\n');
+    const personalContext = [preferences.nickname?'Preferred name: '+preferences.nickname:'',preferences.about?'User context: '+preferences.about:'',preferences.instructions?'User custom instructions: '+preferences.instructions:'','Preferred answer style: '+({natural:'natural',concise:'concise',detailed:'detailed',stepwise:'step-by-step'}[preferences.tone]||'natural'),'Preferred language: '+({auto:'Auto-detect',en:'English',hi:'Hindi',pa:'Punjabi (Gurmukhi script)',hinglish:'Hinglish'}[preferences.language]||'Auto-detect'),preferences.language==='pa'?'Punjabi mode is ON: answer in fluent Punjabi using Gurmukhi script, not Hindi. Preserve code and technical names.':''].filter(Boolean).join('\n');
     const docs = !hasImg ? await retrieveKnowledge(lastText) : [];
     let found = [];
     if (!hasImg && lastText.trim().length > 3) {
