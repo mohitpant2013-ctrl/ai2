@@ -182,6 +182,12 @@ const makeAdminToken = () => {
 };
 const DEFAULT_SETTINGS = { model: MODEL, visionModel: VISION, reasoningEffort: 'medium', maxCompletionTokens: 700, systemPrompt: '' };
 async function getSettings() { return { ...DEFAULT_SETTINGS, ...(await kvGet('settings:global') || {}) }; }
+async function appendAudit(event) {
+  const now=Date.now(), cutoff=now-30*864e5;
+  const old=(await kvGet('audit:events'))||[];
+  const next=[{id:crypto.randomUUID(),at:now,...event},...old.filter(x=>x.at>=cutoff)].slice(0,500);
+  await kvSet('audit:events',next);
+}
 function adminOnly(req, res) { if (!adminToken(req)) { res.status(401).json({ error: 'Admin login required' }); return false; } return true; }
 app.get('/control', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 app.get('/legal', (req, res) => res.sendFile(path.join(__dirname, 'legal.html')));
@@ -191,6 +197,16 @@ app.post('/api/admin/login', (req, res) => {
   res.json({ token: makeAdminToken() });
 });
 app.get('/api/admin/settings', h(async (req, res) => { if (!adminOnly(req,res)) return; res.json(await getSettings()); }));
+app.get('/api/admin/logs', h(async (req,res) => {
+  if (!adminOnly(req,res)) return;
+  const logs=(await kvGet('audit:events'))||[];
+  res.json({logs:logs.slice(0,300),retentionDays:30,limit:500});
+}));
+app.delete('/api/admin/logs', h(async (req,res) => {
+  if (!adminOnly(req,res)) return;
+  await kvSet('audit:events',[]);
+  res.json({ok:true});
+}));
 app.put('/api/admin/settings', h(async (req, res) => {
   if (!adminOnly(req,res)) return;
   const body = req.body || {};
@@ -272,6 +288,7 @@ app.post('/api/register', h(async (req,res) => {
   const salt=crypto.randomBytes(16).toString('hex'), hash=await scrypt(password,salt);
   if(await kvGet(k)) return res.status(409).json({error:'Ye username le liya gaya hai'});
   await kvSet(k,{name:username,salt,hash,at:Date.now(),legalAcceptedAt:new Date().toISOString(),legalVersion:'2026-11-17'});
+  await appendAudit({type:'signup',username,detail:'Account created'});
   res.json({token:sign(normalized),username});
  } finally { registering.delete(k); }
 }));
@@ -279,20 +296,21 @@ app.post('/api/login', h(async (req,res) => {
  const username=String(req.body.username||'').trim(), password=String(req.body.password||''), key=(req.ip||'unknown')+':'+username.toLowerCase();
  if(recent(failedLogins,key,10*60e3).length>=10) return res.status(429).json({error:'Too many incorrect passwords for this username. Wait 10 minutes, then try again.'});
  const u=await kvGet('u:'+username.toLowerCase());
- const bad=()=>{recordAttempt(failedLogins,key,10*60e3);return res.status(401).json({error:'Username ya password galat hai'});};
+ const bad=()=>{recordAttempt(failedLogins,key,10*60e3);appendAudit({type:'login_failed',username:username.slice(0,40),detail:'Invalid credentials'}).catch(()=>{});return res.status(401).json({error:'Username ya password galat hai'});};
  if(!u) return bad();
  const a=Buffer.from(await scrypt(password,u.salt)), b=Buffer.from(u.hash);
  if(a.length!==b.length||!crypto.timingSafeEqual(a,b)) return bad();
  failedLogins.delete(key);
+ await appendAudit({type:'login_success',username:u.name,detail:'Successful sign-in'});
  res.json({token:sign(username.toLowerCase()),username:u.name});
 }));
 
 
-async function getUserPreferences(username){return {nickname:'',tone:'natural',about:'',instructions:'',language:'auto',voiceLang:'en-IN',mode:'',...(await kvGet('prefs:'+username)||{})};}
+async function getUserPreferences(username){return {nickname:'',tone:'natural',about:'',instructions:'',language:'auto',voiceLang:'en-IN',mode:'',auditConsent:false,...(await kvGet('prefs:'+username)||{})};}
 app.get('/api/preferences',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});res.json(await getUserPreferences(u));}));
 app.put('/api/preferences',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const b=req.body||{};
- const prefs={nickname:String(b.nickname||'').trim().slice(0,40),tone:['natural','concise','detailed','stepwise'].includes(b.tone)?b.tone:'natural',about:String(b.about||'').trim().slice(0,600),instructions:String(b.instructions||'').trim().slice(0,1200),language:['auto','en','hi','pa','hinglish'].includes(b.language)?b.language:'auto',voiceLang:['en-IN','hi-IN','pa-IN'].includes(b.voiceLang)?b.voiceLang:'en-IN',mode:['','teacher','coder','friend','short'].includes(b.mode)?b.mode:''};
+ const prefs={nickname:String(b.nickname||'').trim().slice(0,40),tone:['natural','concise','detailed','stepwise'].includes(b.tone)?b.tone:'natural',about:String(b.about||'').trim().slice(0,600),instructions:String(b.instructions||'').trim().slice(0,1200),language:['auto','en','hi','pa','hinglish'].includes(b.language)?b.language:'auto',voiceLang:['en-IN','hi-IN','pa-IN'].includes(b.voiceLang)?b.voiceLang:'en-IN',mode:['','teacher','coder','friend','short'].includes(b.mode)?b.mode:'',auditConsent:b.auditConsent===true};
  await kvSet('prefs:'+u,prefs);res.json({ok:true});
 }));
 
@@ -370,7 +388,31 @@ app.post('/api/chat', async (req, res) => {
       }
       return res.end();
     }
-    for await (const c of r.body) res.write(c);
+    const decoder=new TextDecoder();
+    let pending='', assistantText='';
+    for await (const c of r.body) {
+      res.write(c);
+      pending+=decoder.decode(c,{stream:true});
+      const lines=pending.split(/\r?\n/); pending=lines.pop()||'';
+      for(const line of lines) {
+        if(!line.startsWith('data:')) continue;
+        const payload=line.slice(5).trim();
+        if(!payload||payload==='[DONE]') continue;
+        try {
+          const part=JSON.parse(payload)?.choices?.[0]?.delta?.content;
+          if(typeof part==='string') assistantText=(assistantText+part).slice(-10000);
+        } catch {}
+      }
+    }
+    const account=who(req);
+    if(account) {
+      const prefs=await getUserPreferences(account);
+      if(prefs.auditConsent===true) {
+        await appendAudit({type:'chat',username:account,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:assistantText});
+      } else {
+        await appendAudit({type:'chat_activity',username:account,detail:'Chat request completed; transcript not stored (no consent)'});
+      }
+    }
     res.end();
   } catch (e) {
     try { send({ error: String(e).slice(0, 200) }); } catch {}

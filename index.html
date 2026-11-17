@@ -195,6 +195,8 @@ body,#main,#side,#auth,#main{background:#000!important}
 <label>Response style</label><select id="prefTone"><option value="natural">Balanced</option><option value="concise">Short and direct</option><option value="detailed">Detailed explanations</option><option value="stepwise">Step by step</option></select>
 <label>Response language</label><select id="prefLanguage"><option value="auto">Automatic</option><option value="en">English</option><option value="hi">Hindi</option><option value="pa">Punjabi (Gurmukhi)</option><option value="hinglish">Hinglish</option></select>
 <label>Custom instructions (optional)</label><textarea id="prefInstructions" maxlength="1600" rows="4" placeholder="Example: Explain technical topics simply. Use examples."></textarea>
+<label style="display:flex;gap:9px;align-items:flex-start;margin-top:14px"><input id="prefAuditConsent" type="checkbox" style="width:auto;margin-top:3px;flex:none"> <span>Allow DeftAI owner to review my chat messages and AI replies for support and debugging. I can turn this off any time.</span></label>
+<small>Optional. If off, message text is not copied into admin activity logs. Login activity metadata is still recorded for security. Avoid entering sensitive information.</small>
 <small>Only add details that help DeftAI answer better. Don't enter passwords or sensitive information.</small>
 <div class="personalSaveRow"><button class="pri" type="button" id="savePersonalBtn" onclick="savePreferences()">Save personalization</button><span id="personalSaveStatus" role="status" aria-live="polite"></span></div>
 </div>
@@ -447,6 +449,7 @@ async function loadPreferences(){
  $('prefAbout').value=userPrefs.about||'';
  $('prefTone').value=userPrefs.tone||'natural';
  $('prefInstructions').value=userPrefs.instructions||'';
+ $('prefAuditConsent').checked=userPrefs.auditConsent===true;
  $('prefLanguage').value=userPrefs.language||'auto';
  $('prefVoice').value=userPrefs.voiceLang||'en-IN';
  $('prefAccent').value=localStorage.getItem('deft_accent')||'violet';
@@ -463,7 +466,7 @@ function settingsTab(t){
 }
 async function savePreferences(){
  const btn=$('savePersonalBtn'),status=$('personalSaveStatus');
- const body={nickname:$('prefNickname').value.trim(),about:$('prefAbout').value.trim(),tone:$('prefTone').value,mode:$('prefMode').value,instructions:$('prefInstructions').value.trim(),language:$('prefLanguage').value,voiceLang:$('prefVoice').value};
+ const body={nickname:$('prefNickname').value.trim(),about:$('prefAbout').value.trim(),tone:$('prefTone').value,mode:$('prefMode').value,instructions:$('prefInstructions').value.trim(),language:$('prefLanguage').value,voiceLang:$('prefVoice').value,auditConsent:$('prefAuditConsent').checked};
  if(btn){btn.disabled=true;btn.textContent='Saving…'}status.textContent='Saving to your account…';
  try{
   const r=await api('/api/preferences',{method:'PUT',body:JSON.stringify(body)});
