@@ -9,7 +9,7 @@ const MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
 const VISION = process.env.GROQ_VISION_MODEL || MODEL;
 const PASS = process.env.ACCESS_PASSWORD || '';
 const TAVILY = process.env.TAVILY_API_KEY || ''; // optional: full web search
-const FALLBACK = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'];
+const FALLBACK = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'];
 const G = 'https://api.groq.com/openai/v1';
 const UA = { 'User-Agent': 'DeftAI/1.0 (personal chat app)' };
 const crypto = require('crypto');
@@ -41,10 +41,11 @@ function who(req) {
 }
 
 
-// Groq call with automatic fallback if a model was removed (404)
+// Rotate through fallback models for model-specific limits and temporary provider failures.
 async function groq(body, models, signal, effort = 'medium') {
   let r;
-  for (const model of models) {
+  const tried = [...new Set(models.filter(Boolean))];
+  for (const model of tried) {
     const b = { ...body, model };
     if (model.startsWith('openai/gpt-oss')) b.reasoning_effort = effort;
     if (model.startsWith('qwen/')) { b.reasoning_format = 'hidden'; b.reasoning_effort = effort; }
@@ -53,8 +54,9 @@ async function groq(body, models, signal, effort = 'medium') {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + KEY },
       body: JSON.stringify(b)
     });
-    if (r.ok || (r.status !== 404 && r.status !== 400)) return r;
-    console.log('model not found:', model);
+    if (r.ok) return r;
+    if (![400,404,429,500,502,503,504].includes(r.status)) return r;
+    console.warn('Groq model fallback:', model, 'HTTP', r.status);
   }
   return r;
 }
@@ -65,7 +67,8 @@ const MODES = {
   friend: 'Talk like a warm, funny close friend (casual Hinglish if the user uses it), but stay accurate.',
   short: 'Answer in at most 3 short sentences unless asked for more.'
 };
-const sysPrompt = (model, src, mode, custom = '') => `You are DeftAI, a smart, friendly and careful AI assistant created by FyreDeft. Today's date: ${new Date().toDateString()}.
+const sysPrompt = (model, src, mode, custom = '') => `You are DeftAI, a smart, friendly, original and careful AI assistant created by FyreDeft. Today's date: ${new Date().toDateString()}.
+Creative intelligence: For ideas, stories, names, designs, strategies, concepts, jokes and brainstorming, avoid generic first ideas. Offer distinctive options with concrete details and unexpected but sensible combinations. Prefer useful originality over random weirdness. Adapt to constraints and audience. Make a strong first draft instead of endlessly asking questions. Never claim an idea is unprecedented unless verified. For technical and factual tasks, prioritize correctness over novelty.
 Identity rules: if (and only if) someone asks who you are, who made/created/built you, or who FyreDeft is, answer exactly this (translated into the user's language/style): "I'm DeftAI, made by FyreDeft, a Minecraft CPVP player, Minecraft developer, Java developer and AI researcher." Add nothing more about FyreDeft; if asked for more details, say you don't have any. Never invent facts about FyreDeft. If asked about the technical model behind you, say you run on ${model} via Groq. Never claim to be GPT-4, ChatGPT, Claude or any other product.
 Language: Follow the Preferred language in additional user context. Auto-detect means match the user's language/style; Hindi means Hindi; Punjabi means Punjabi (Gurmukhi unless the user uses Roman Punjabi); Hinglish means natural Roman Hindi-English mix.
 Typos: silently fix obvious typos; if a message is truly unclear, ask ONE short clarifying question.
@@ -252,10 +255,10 @@ const limited = ip => {
 
 const NAME = /^[a-zA-Z0-9_.]{3,20}$/;
 const ah = new Map();
-const authLimited = ip => { const n = Date.now(), a = (ah.get(ip) || []).filter(t => n - t < 60000); a.push(n); ah.set(ip, a); return a.length > 10; };
+const authLimited = ip => { const n = Date.now(), a = (ah.get(ip) || []).filter(t => n - t < 60000); a.push(n); ah.set(ip, a); return a.length > 30; };
 
 app.post('/api/register', h(async (req, res) => {
-  if (authLimited(req.ip)) return res.status(429).json({ error: 'Bahut tries. 1 minute ruko.' });
+  if (authLimited(req.ip)) return res.status(429).json({ error: 'Too many sign-in attempts from this network. Please wait 60 seconds and try again.' });
   const username = String(req.body.username || ''), password = String(req.body.password || '');
   if (PASS && req.body.invite !== PASS) return res.status(403).json({ error: 'Invite code galat hai' });
   if (!NAME.test(username)) return res.status(400).json({ error: 'Username 3-20 characters: letters, numbers, _ ya .' });
@@ -352,10 +355,20 @@ app.post('/api/chat', async (req, res) => {
     const activeModel = settings.model || MODEL;
     const maxTokens = Math.max(256, Math.min(900, Number(settings.maxCompletionTokens) || 900));
     const activeVision = settings.visionModel || activeModel;
+    const creativeRequest = /\b(creative|creativity|brainstorm|ideas?|concepts?|design|story|storytelling|poem|joke|funny|original|unique|imagine|invent|script|thumbnail|video idea|content idea)\b/i.test(lastText);
     const r = await groq(
-      { messages: [{ role: 'system', content: sysPrompt(hasImg ? activeVision : activeModel, srcText, req.body.mode, [settings.systemPrompt,personalContext].filter(Boolean).join('\n')) }, ...history], stream: true, temperature: 0.6, max_completion_tokens: maxTokens },
-      hasImg ? [activeVision] : [...new Set([activeModel, ...FALLBACK])], ctrl.signal, settings.reasoningEffort || 'medium');
-    if (!r.ok) { send({ error: (await r.text()).slice(0, 300) }); return res.end(); }
+      { messages: [{ role: 'system', content: sysPrompt(hasImg ? activeVision : activeModel, srcText, req.body.mode, [settings.systemPrompt,personalContext].filter(Boolean).join('\n')) }, ...history], stream: true, temperature: creativeRequest ? 0.88 : 0.65, max_completion_tokens: maxTokens },
+      hasImg ? [...new Set([activeVision, ...FALLBACK])] : [...new Set([activeModel, ...FALLBACK])], ctrl.signal, settings.reasoningEffort || 'medium');
+    if (!r.ok) {
+      const raw = await r.text();
+      if (r.status === 429 || /rate.?limit|tokens per minute|quota/i.test(raw)) {
+        send({ error: 'PROVIDER_LIMIT', message: 'AI provider is temporarily at its usage limit. Alternate models are busy too; please retry shortly.' });
+      } else {
+        console.error('Groq request failed:', r.status, raw.slice(0, 500));
+        send({ error: 'PROVIDER_ERROR', message: 'AI provider temporarily unavailable (HTTP ' + r.status + '). Please retry shortly.' });
+      }
+      return res.end();
+    }
     for await (const c of r.body) res.write(c);
     res.end();
   } catch (e) {

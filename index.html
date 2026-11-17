@@ -400,11 +400,13 @@ async function go(){
     while(true){const{done,value}=await rd.read();if(done)break;buf+=dc.decode(value,{stream:true});
       const lines=buf.split('\n');buf=lines.pop();
       for(const l of lines){const t=l.trim();if(!t.startsWith('data:'))continue;const d=t.slice(5).trim();if(d==='[DONE]')continue;
-        let j;try{j=JSON.parse(d)}catch{continue}if(j.error)throw new Error('API:'+j.error);if(j.status&&!full)bd.innerHTML=TYP+'<small class="stt">'+esc(j.status)+'</small>';if(j.sources)srcs=j.sources;const x=j.choices?.[0]?.delta?.content;if(x){full+=x;if(clean(full))paint(bd,full);scrollChat()}}}
+        let j;try{j=JSON.parse(d)}catch{continue}if(j.error)throw new Error(j.error==='PROVIDER_LIMIT'?'PROVIDER_LIMIT':j.error==='PROVIDER_ERROR'?'PROVIDER_ERROR':'API:'+j.error);if(j.status&&!full)bd.innerHTML=TYP+'<small class="stt">'+esc(j.status)+'</small>';if(j.sources)srcs=j.sources;const x=j.choices?.[0]?.delta?.content;if(x){full+=x;if(clean(full))paint(bd,full);scrollChat()}}}
     paint(bd,full,srcs);scrollChat();c.messages.push({role:'assistant',content:full,sources:srcs});actions(c);
   }catch(e){
     if(e.name==='AbortError'){if(full)c.messages.push({role:'assistant',content:full+' _[stopped]_'});paint(bd,full+' _[stopped]_',srcs)}
-    else{const m=e.message==='AUTH'?'Session expire ho gaya. Dobara sign in karo.':e.message==='RATE'?'Bahut jaldi-jaldi messages. 1 minute ruko.':
+    else{const m=e.message==='AUTH'?'Session expire ho gaya. Dobara sign in karo.':e.message==='RATE'?'Bahut jaldi-jaldi messages. Thodi der rukkar try karo.':
+      e.message==='PROVIDER_LIMIT'?'DeftAI ka AI provider abhi usage limit par hai. Alternate models bhi busy hain; thodi der baad try karo.':
+      e.message==='PROVIDER_ERROR'?'AI service temporarily unavailable hai. Thodi der baad retry karo.':
       e.message.startsWith('API:')?'Error: '+e.message.slice(4):'Server se connect nahi hua. Render free plan so jata hai, 1 minute baad try karo.';
       bd.textContent=m;c.messages.pop()}
   }finally{ctrl=null;$('send').style.display='';$('stop').style.display='none';save()}
