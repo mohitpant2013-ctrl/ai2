@@ -95,7 +95,7 @@ const safeUrl = u => { try { const x = new URL(u); return /^https?:$/.test(x.pro
 // Read any website the user mentions (full URL or like "youtube.com")
 async function readUrls(urls, send) {
   const out = [];
-  for (const u of urls.filter(safeUrl)) {
+  for (const u of urls.filter(u => safeUrl(u) && trustedSearchResult({ url: u }))) {
     try {
       send({ status: 'Website padh raha hoon: ' + new URL(u).hostname });
       const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DeftAI/1.0)', 'Accept-Language': 'en' }, signal: AbortSignal.timeout(8000), redirect: 'follow' });
