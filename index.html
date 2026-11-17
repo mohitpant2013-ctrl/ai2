@@ -395,7 +395,7 @@ window.onload=()=>{document.querySelectorAll('i[data-i]').forEach(e=>e.outerHTML
   applyAccent();applyDisplay();$('mode').value=localStorage.getItem('deft_mode')||'';status();setInterval(status,30000);
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
   user=localStorage.getItem('deft_user')||'';if(token&&user){start();loadPreferences()}};
-</script></body></html>
+</script>
 <style>
 #settingsModal.open{display:flex!important;align-items:stretch!important;justify-content:stretch!important;padding:0!important;background:#000!important}
 #settingsCard{width:100%!important;height:100dvh!important;max-height:none!important;max-width:none!important;border:0!important;border-radius:0!important;padding:0!important;display:grid!important;grid-template-columns:260px minmax(0,1fr)!important;overflow:hidden!important;background:#000!important}
@@ -410,3 +410,4 @@ window.onload=()=>{document.querySelectorAll('i[data-i]').forEach(e=>e.outerHTML
 @media(max-width:420px){.settingsTop h1{font-size:20px}.settingsContent{padding:16px 12px!important}.settingsFooter{flex-direction:column;align-items:stretch}.settingsFooter>div{width:100%}.settingsFooter button{flex:1}.sug{grid-template-columns:1fr}}
 @media(orientation:landscape) and (max-height:500px){#top{padding:5px 10px}#box{padding-bottom:4px}#bar{padding:5px}.fine{display:none}}
 </style>
+</body></html>
