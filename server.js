@@ -181,6 +181,7 @@ const DEFAULT_SETTINGS = { model: MODEL, visionModel: VISION, reasoningEffort: '
 async function getSettings() { return { ...DEFAULT_SETTINGS, ...(await kvGet('settings:global') || {}) }; }
 function adminOnly(req, res) { if (!adminToken(req)) { res.status(401).json({ error: 'Admin login required' }); return false; } return true; }
 app.get('/control', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
+app.get('/legal', (req, res) => res.sendFile(path.join(__dirname, 'legal.html')));
 app.post('/api/admin/login', (req, res) => {
   const expected = process.env.ADMIN_PASSWORD || '';
   if (!expected || String(req.body.password || '') !== expected) return res.status(401).json({ error: 'Invalid admin password or ADMIN_PASSWORD is not configured' });
@@ -259,10 +260,11 @@ app.post('/api/register', h(async (req, res) => {
   if (PASS && req.body.invite !== PASS) return res.status(403).json({ error: 'Invite code galat hai' });
   if (!NAME.test(username)) return res.status(400).json({ error: 'Username 3-20 characters: letters, numbers, _ ya .' });
   if (password.length < 6) return res.status(400).json({ error: 'Password kam se kam 6 characters ka rakho' });
+  if (req.body.legalAccepted !== true) return res.status(400).json({ error: 'Terms aur Privacy Policy accept karna zaroori hai.' });
   const k = 'u:' + username.toLowerCase();
   if (await kvGet(k)) return res.status(409).json({ error: 'Ye username le liya gaya hai' });
   const salt = crypto.randomBytes(16).toString('hex');
-  await kvSet(k, { name: username, salt, hash: await scrypt(password, salt), at: Date.now() });
+  await kvSet(k, { name: username, salt, hash: await scrypt(password, salt), at: Date.now(), legalAcceptedAt: new Date().toISOString(), legalVersion: '2026-11-17' });
   res.json({ token: sign(username.toLowerCase()), username });
 }));
 

@@ -130,6 +130,7 @@ body,#main,#side,#auth,#main{background:#000!important}
   <input id="lu" placeholder="Username" autocomplete="username">
   <input id="lp" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')authGo()">
   <input id="linv" placeholder="Invite code (owner se lo)" style="display:none">
+  <label id="legalConsent" style="display:none;font-size:12px;line-height:1.5;color:#aaa;gap:8px;align-items:flex-start"><input id="legalAgree" type="checkbox" style="width:auto;margin-top:3px"> I agree to the <a href="/legal" target="_blank" rel="noopener" style="color:#ddd">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener" style="color:#ddd">Privacy & Data Policy</a>.</label>
   <div id="aerr"></div>
   <button id="abtn" class="pri" onclick="authGo()">Sign in</button>
 </div></div>
@@ -185,7 +186,7 @@ body,#main,#side,#auth,#main{background:#000!important}
 <div id="paneGeneral" class="setPane"><h2>General</h2><p>Choose how DeftAI behaves by default.</p><div class="settingChoice"><b>Keyboard shortcuts</b><small>Ctrl + K: Search · Ctrl + Enter: Send · Ctrl + Shift + N: New chat · /: Message box</small></div>
 <label>Default response mode</label><select id="prefMode"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select>
 <label>Response language</label><select id="prefLanguage"><option value="auto">Automatic (match my message)</option><option value="en">English</option><option value="hi">Hindi</option><option value="pa">Punjabi</option><option value="hinglish">Hinglish</option></select>
-<label>Voice narrator language</label><select id="prefVoice"><option value="en-IN">English (India)</option><option value="hi-IN">Hindi</option><option value="pa-IN">Punjabi (India)</option></select>
+<label>Voice narrator language</label><select id="prefVoice" onchange="previewNarratorLanguage(this.value)"><option value="en-IN">English (India)</option><option value="hi-IN">Hindi</option><option value="pa-IN">Punjabi (India)</option></select>
 <div class="settingChoice"><b>Narrator status</b><small id="voiceStatus" aria-live="polite">Checking voices on this device…</small><button type="button" onclick="testNarrator()">▶ Test narrator</button><small>Punjabi needs an installed Punjabi speech voice. If unavailable, DeftAI clearly reports and uses a Hindi fallback.</small></div>
 <div class="settingChoice"><b>Display size</b><span>Auto adapts to phones, laptops, desktops and TVs.</span><select id="prefDisplay"><option value="auto">Automatic</option><option value="compact">Compact</option><option value="tv">Large screen / TV</option></select></div></div>
 <div id="panePersonal" class="setPane" hidden>
@@ -211,8 +212,8 @@ body,#main,#side,#auth,#main{background:#000!important}
 <div class="settingChoice"><b>Message bubbles</b><select id="prefBubble"><option value="soft">Soft rounded</option><option value="round">Extra rounded</option><option value="square">Square</option><option value="minimal">Minimal</option></select></div>
 <div class="settingChoice"><label class="checkLine"><input id="prefReduceMotion" type="checkbox"> Reduce animations</label></div>
 <div class="settingChoice"><button type="button" onclick="resetAppearance()">Reset appearance</button></div></div>
-<div id="paneData" class="setPane" hidden><h2>Data controls</h2><p>Manage your chats and account data.</p><div class="settingChoice"><b>Export current conversation</b><small>Download this chat as a Markdown file.</small><button onclick="closeSettings();exportChat()">Export chat</button></div><div class="settingChoice"><b>Chat storage</b><small>Chats are saved to your DeftAI account when the server storage is available.</small></div></div>
-<div id="paneAbout" class="setPane" hidden><h2>About DeftAI</h2><p>DeftAI · built by FyreDeft.</p><div class="settingChoice"><b>Version</b><span>Web edition</span></div><div class="settingChoice"><b>Owner console</b><a href="/control">Open admin panel ↗</a></div></div>
+<div id="paneData" class="setPane" hidden><h2>Data controls</h2><p>Understand and manage the information used by DeftAI.</p><div class="settingChoice"><b>Export current conversation</b><small>Download this chat as a Markdown file.</small><button onclick="closeSettings();exportChat()">Export chat</button></div><div class="settingChoice"><b>What DeftAI stores</b><small>Account username, password hash (not your plain password), chats and saved preferences. Uploaded content is sent for processing when you use chat features. Hosting and AI providers may process technical/request data as described in the policy.</small></div><div class="settingChoice"><b>Storage and retention</b><small>Current app storage is a local JSON file on the hosting instance. It may be temporary and can be lost on restart/redeploy; do not treat DeftAI as permanent backup storage.</small></div><div class="settingChoice"><b>Privacy policy and terms</b><a href="/legal" target="_blank" rel="noopener">Read the full policy ↗</a></div></div>
+<div id="paneAbout" class="setPane" hidden><h2>About DeftAI</h2><p>DeftAI · built by FyreDeft.</p><div class="settingChoice"><b>Version</b><span>Web edition · beta</span></div><div class="settingChoice"><b>Current plan</b><span>Free beta. No paid subscription or payment processing is currently offered in this app.</span></div><div class="settingChoice"><b>Owner console</b><a href="/control">Open admin panel ↗</a></div><div class="settingChoice"><b>Terms & Privacy</b><a href="/legal">Read policies ↗</a></div></div>
 <footer class="settingsFooter"><span id="settingsMsg" class="setNote"></span><div><button onclick="closeSettings()">Cancel</button><button class="pri" onclick="savePreferences()">Save changes</button></div></footer>
 </div></section></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
@@ -263,11 +264,13 @@ async function load(){try{const r=await api('/api/chats');if(r.status===401){log
   if(!chats.length){try{chats=JSON.parse(localStorage.getItem('deft_chats_'+user))||[];if(chats.length)save()}catch{}}return true}
 
 let token=localStorage.getItem('deft_token')||'',amode='in';
-function tab(m){amode=m;$('tIn').className=m==='in'?'on':'';$('tUp').className=m==='up'?'on':'';$('linv').style.display=m==='up'?'':'none';
+function tab(m){amode=m;$('tIn').className=m==='in'?'on':'';$('tUp').className=m==='up'?'on':'';$('linv').style.display=m==='up'?'':'none';$('legalConsent').style.display=m==='up'?'flex':'none';
   $('abtn').textContent=m==='in'?'Sign in':'Create account';$('aerr').textContent='';$('lp').autocomplete=m==='in'?'current-password':'new-password'}
 async function authGo(){const b=$('abtn');$('aerr').textContent='';
   const body={username:$('lu').value.trim(),password:$('lp').value,invite:$('linv').value.trim()};
   if(!body.username||!body.password){$('aerr').textContent='Username aur password daalo';return}
+  if(amode==='up'&&!$('legalAgree').checked){$('aerr').textContent='Account banane ke liye Terms aur Privacy Policy accept karo.';return}
+  body.legalAccepted=amode==='up'&&$('legalAgree').checked;
   b.disabled=true;
   try{const r=await fetch('/api/'+(amode==='in'?'login':'register'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const j=await r.json();if(!r.ok){$('aerr').textContent=j.error||'Error';return}
@@ -316,15 +319,18 @@ function actions(c){
       bar.appendChild(mk(ic('download'),'Download .md',()=>downloadAnswer(m.content,'md')));
       if(i===c.messages.length-1)bar.appendChild(mk(ic('refresh'),'Dobara likho',()=>{if(ctrl)return;c.messages.splice(i);save();renderMsgs();go()}));
       d.appendChild(bar)}})}
-function voiceLanguage(){return userPrefs.voiceLang||'en-IN'}
+function voiceLanguage(){return ($('prefVoice')&&$('prefVoice').value)||userPrefs.voiceLang||'en-IN'}
+function previewNarratorLanguage(lang){userPrefs.voiceLang=lang;if('speechSynthesis' in window)speechSynthesis.cancel();refreshNarratorStatus()}
 function recognitionLanguage(){const l=userPrefs.language||'auto';return l==='pa'?'pa-IN':(l==='hi'||l==='hinglish')?'hi-IN':l==='en'?'en-IN':voiceLanguage()}
 function availableSpeechVoices(){return ('speechSynthesis' in window)?speechSynthesis.getVoices():[]}
 function pickSpeechVoice(lang){const voices=availableSpeechVoices(),prefix=lang.toLowerCase().split('-')[0];return voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())||voices.find(v=>v.lang.toLowerCase().startsWith(prefix+'-'))||null}
-function refreshNarratorStatus(){const el=$('voiceStatus');if(!el)return;const lang=voiceLanguage(),voice=pickSpeechVoice(lang);if(voice){el.textContent='Ready: '+voice.name+' ('+voice.lang+').';return}if(lang==='pa-IN'){const fb=pickSpeechVoice('hi-IN');el.textContent=fb?'Punjabi voice not installed. Hindi fallback available: '+fb.name+'.':'No Punjabi voice found on this device. Install a Punjabi speech voice in your OS/browser.'}else el.textContent='No exact '+lang+' voice found yet. Browser may use its default voice.'}
+function refreshNarratorStatus(){const el=$('voiceStatus');if(!el)return;const lang=voiceLanguage(),voice=pickSpeechVoice(lang);if(voice){el.textContent='Ready: '+voice.name+' ('+voice.lang+').';return}if(lang==='pa-IN'){const fb=pickSpeechVoice('hi-IN');el.textContent=fb?'Punjabi voice unavailable. Hindi fallback available: '+fb.name+' ('+fb.lang+').':'No Punjabi or Hindi voice found. Install a Punjabi/Hindi speech voice in Windows or use a browser that provides one.';return}if(lang==='hi-IN'){el.textContent='Hindi voice not available on this device/browser. Install a Hindi speech voice; English will not be used as a fake Hindi voice.';return}el.textContent='No Indian English voice found. An available English voice may be used for English narration.'}
 function speakText(text){if(!('speechSynthesis' in window))return alert('Narrator is not supported in this browser.');if(speechSynthesis.speaking){speechSynthesis.cancel();return}
- const lang=voiceLanguage();let voice=pickSpeechVoice(lang),spokenLang=lang;if(!voice&&lang==='pa-IN'){voice=pickSpeechVoice('hi-IN');if(voice)spokenLang='hi-IN'}
- const u=new SpeechSynthesisUtterance(clean(String(text)).replace(/[#*\x60_>\[\]]/g,''));u.lang=voice?voice.lang:spokenLang;u.voice=voice||null;u.rate=.96;u.onerror=()=>{const el=$('voiceStatus');if(el)el.textContent='This device could not start the selected voice.'};speechSynthesis.speak(u)}
-function testNarrator(){const l=voiceLanguage(),samples={'en-IN':'Hello! This is the DeftAI narrator test.','hi-IN':'नमस्ते! यह डेफ्ट एआई की आवाज़ का परीक्षण है।','pa-IN':'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਇਹ ਡੈਫਟ ਏਆਈ ਦੀ ਆਵਾਜ਼ ਦੀ ਜਾਂਚ ਹੈ।'};speakText(samples[l]||samples['en-IN'])}
+ const lang=voiceLanguage();let voice=pickSpeechVoice(lang);if(!voice&&lang==='pa-IN')voice=pickSpeechVoice('hi-IN');if(!voice&&lang==='en-IN')voice=availableSpeechVoices().find(v=>v.lang.toLowerCase().startsWith('en-'))||null;
+ if(!voice){refreshNarratorStatus();alert(lang==='hi-IN'?'Hindi speech voice is not installed. Add a Hindi voice in Windows Settings > Time & Language > Speech.':lang==='pa-IN'?'Punjabi/Hindi speech voice is not installed. Add one in Windows Settings > Time & Language > Speech.':'No English speech voice is available in this browser.');return}
+ const u=new SpeechSynthesisUtterance(clean(String(text)).replace(/[#*\x60_>\[\]]/g,''));u.lang=voice.lang;u.voice=voice;u.rate=.96;u.onerror=()=>{const el=$('voiceStatus');if(el)el.textContent='The selected voice failed to start. Check Windows speech settings.'};speechSynthesis.speak(u)}
+function testNarrator(){const l=voiceLanguage(),samples={'en-IN':'Hello! This is the DeftAI narrator test.','hi-IN':'नमस्ते! यह डेफ्ट एआई की आवाज़ का परीक्षण है।','pa-IN':'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਇਹ ਡੈਫਟ ਏਆઈ ਦੀ ਆਵਾਜ਼ ਦੀ ਜਾਂਚ ਹੈ।'};speakText(samples[l]||samples['en-IN'])}
+if('speechSynthesis' in window){speechSynthesis.addEventListener('voiceschanged',refreshNarratorStatus);setTimeout(refreshNarratorStatus,250)}
 function downloadAnswer(content,ext){
  const blob=new Blob([clean(String(content))],{type:ext==='md'?'text/markdown;charset=utf-8':'text/plain;charset=utf-8'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='deftai-answer.'+ext;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
