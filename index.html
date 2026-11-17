@@ -79,6 +79,22 @@ textarea{flex:1;background:none;border:none;outline:none;color:var(--tx);font:in
 .tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--el);border-radius:11px;padding:3px}.tabs button{border:none;justify-content:center;color:var(--mu)}.tabs .on{background:var(--hv);color:var(--tx)}
 #aerr{color:#f87171;font-size:13px;min-height:0}
 @media(max-width:760px){#side{position:fixed;inset:0 auto 0 0;transform:translateX(-100%);transition:.2s;box-shadow:20px 0 60px rgba(0,0,0,.6)}#side.open{transform:none}#menu{display:inline-flex}.sug{grid-template-columns:1fr}}
+
+:root{--bg:#000;--panel:#050505;--el:#090909;--hv:#111;--bd:rgba(255,255,255,.10);--bd2:rgba(255,255,255,.20);--tx:#f5f5f5;--mu:#929292;--ac:#d8d8d8;--ac2:#777}
+body,#main,#side,#auth,#main{background:#000!important}
+.logo,.orb,.b::before{background:#171717!important;box-shadow:none!important}
+#main{min-height:0;background:#000!important}#chat{min-height:0;overscroll-behavior:contain}
+#bar{background:#080808;box-shadow:none}#bar:focus-within{border-color:#555;box-shadow:0 0 0 2px #222}
+#send,#stop,.pri{background:#eee;color:#000}.tg.on{color:#fff;border-color:#666;background:#171717}.b a{color:#ddd}
+#settingsModal{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.84);display:none;align-items:center;justify-content:center;padding:16px}
+#settingsModal.open{display:flex}#settingsCard{width:min(560px,100%);max-height:92dvh;overflow:auto;background:#080808;border:1px solid #333;border-radius:18px;padding:22px;box-shadow:0 24px 80px #000}
+.setHead{display:flex;align-items:center;justify-content:space-between}.setTabs{display:flex;gap:8px;border-bottom:1px solid #252525;margin:16px 0}
+.setTabs button{border:0;color:#999}.setTabs button.on{background:#1b1b1b;color:#fff}
+.setPane label{display:block;font-size:13px;color:#bbb;margin:14px 0 6px}
+.setPane input,.setPane textarea,.setPane select{width:100%;background:#000;color:#fff;border:1px solid #333;border-radius:9px;padding:11px;font:inherit}
+.setPane textarea{min-height:90px;resize:vertical}.setActions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.setNote{font-size:12px;color:#888;margin-top:10px}
+@media(max-width:760px){#settingsCard{padding:17px}#top{padding:9px 10px}}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs><symbol id="i-logo" viewBox="0 0 24 24"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3-1-4-1-7 1-10z"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol><symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol><symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol><symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol><symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol><symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol><symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></symbol><symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol><symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M16 8l4 4-4 4M20 12H9"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol><symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol><symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5"/></symbol><symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m21 16-5-5-9 9"/></symbol></defs></svg>
 <div id="auth"><div class="card">
@@ -97,6 +113,7 @@ textarea{flex:1;background:none;border:none;outline:none;color:var(--tx);font:in
   <div class="brand"><span class="logo"><i data-i="logo"></i></span><b>DeftAI<small>by FyreDeft</small></b></div>
   <button id="new" onclick="newChat();renderList();renderMsgs();$('side').classList.remove('open')"><i data-i="plus"></i> New chat</button>
   <div id="list"></div>
+  <button onclick="openSettings()">⚙ Settings & Personalization</button>
   <button onclick="exportChat()"><i data-i="download"></i> Export chat</button>
   <div class="me"><span id="av">?</span><span id="uname"></span><button class="ib" title="Log out" onclick="logout()"><i data-i="logout"></i></button></div>
 </div>
@@ -104,6 +121,7 @@ textarea{flex:1;background:none;border:none;outline:none;color:var(--tx);font:in
 <div id="main">
   <div id="top"><button id="menu" class="ib" onclick="$('side').classList.toggle('open')"><i data-i="menu"></i></button>
     <span class="pill"><span class="dot wait" id="dot"></span><span id="stxt">Checking...</span></span>
+    <button onclick="openSettings()" title="Settings">⚙</button>
     <select id="mode" onchange="localStorage.setItem('deft_mode',this.value)"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select></div>
   <div id="chat"><div class="wrap" id="msgs"></div></div>
   <div id="box"><div id="bar">
@@ -120,6 +138,24 @@ textarea{flex:1;background:none;border:none;outline:none;color:var(--tx);font:in
     <div class="fine">DeftAI galti kar sakta hai. Zaroori baatein sources se check karo.</div></div>
 </div>
 
+
+<div id="settingsModal" onclick="if(event.target===this)closeSettings()">
+<section id="settingsCard" role="dialog" aria-modal="true">
+<div class="setHead"><h2>Settings</h2><button onclick="closeSettings()">✕</button></div>
+<div class="setTabs"><button id="tabGeneral" class="on" onclick="settingsTab('general')">General</button><button id="tabPersonal" onclick="settingsTab('personal')">Personalization</button></div>
+<div id="paneGeneral" class="setPane">
+<label>Default response mode</label><select id="prefMode"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select>
+<label>Theme</label><input value="Pure black (fixed)" disabled><p>Static pure-black interface.</p>
+</div>
+<div id="panePersonal" class="setPane" hidden>
+<label>Preferred name (optional)</label><input id="prefNickname" maxlength="40" placeholder="What should DeftAI call you?">
+<label>Response style</label><select id="prefTone"><option value="natural">Natural</option><option value="concise">Concise</option><option value="detailed">Detailed</option><option value="stepwise">Step-by-step</option></select>
+<label>About you (optional)</label><textarea id="prefAbout" maxlength="1200" placeholder="Interests, projects, or useful context..."></textarea>
+<label>Custom instructions</label><textarea id="prefInstructions" maxlength="1600" placeholder="How should DeftAI respond?"></textarea>
+<p class="setNote">Saved to your DeftAI account. Do not enter passwords or highly sensitive information.</p>
+</div>
+<div class="setActions"><button onclick="closeSettings()">Cancel</button><button class="pri" onclick="savePreferences()">Save settings</button></div><div id="settingsMsg" class="setNote"></div>
+</section></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -128,6 +164,8 @@ const $=id=>document.getElementById(id);
 const ic=n=>'<svg class="ic"><use href="#i-'+n+'"/></svg>';
 let user=null,code='',chats=[],cur=null,pend=[],ctrl=null;
 const key=()=>'deft_chats_'+user;
+let userPrefs={nickname:'',tone:'natural',about:'',instructions:''};
+function scrollChat(){const el=$('chat');if(el)requestAnimationFrame(()=>el.scrollTo({top:el.scrollHeight,behavior:'auto'}))}
 const clean=s=>s.replace(/<think>[\s\S]*?(<\/think>|$)/g,'').trim();
 const md=s=>DOMPurify.sanitize(marked.parse(clean(s)));
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -179,7 +217,7 @@ function addMsg(m){const d=document.createElement('div');
     (m.files||[]).forEach(f=>{const s=document.createElement('span');s.className='chip';s.innerHTML=ic('file');s.append(f);d.appendChild(s)});
     d.appendChild(document.createTextNode(m.shown??m.content))}
   else{d.className='m b';paint(d,m.content,m.sources)}
-  $('msgs').appendChild(d);$('chat').scrollTop=1e9;return d}
+  $('msgs').appendChild(d);scrollChat();return d}
 function renderMsgs(){const w=$('msgs');w.innerHTML='';const c=getChat();
   if(!c.messages.length)w.innerHTML='<div id="empty"><div class="orb">'+ic('logo')+'</div><h1>Namaste, '+esc(user)+'</h1><p>Main DeftAI hoon, FyreDeft ka banaya hua. Apne curated knowledge documents se jawab de sakta hoon.</p><div class="sug">'+SUG.map(t=>'<button onclick="ask(this.textContent)">'+t+'</button>').join('')+'</div></div>';
   else{c.messages.forEach(addMsg);actions(c)}}
@@ -248,8 +286,8 @@ async function go(){
     while(true){const{done,value}=await rd.read();if(done)break;buf+=dc.decode(value,{stream:true});
       const lines=buf.split('\n');buf=lines.pop();
       for(const l of lines){const t=l.trim();if(!t.startsWith('data:'))continue;const d=t.slice(5).trim();if(d==='[DONE]')continue;
-        let j;try{j=JSON.parse(d)}catch{continue}if(j.error)throw new Error('API:'+j.error);if(j.status&&!full)bd.innerHTML=TYP+'<small class="stt">'+esc(j.status)+'</small>';if(j.sources)srcs=j.sources;const x=j.choices?.[0]?.delta?.content;if(x){full+=x;if(clean(full))paint(bd,full);$('chat').scrollTop=1e9}}}
-    paint(bd,full,srcs);c.messages.push({role:'assistant',content:full,sources:srcs});actions(c);
+        let j;try{j=JSON.parse(d)}catch{continue}if(j.error)throw new Error('API:'+j.error);if(j.status&&!full)bd.innerHTML=TYP+'<small class="stt">'+esc(j.status)+'</small>';if(j.sources)srcs=j.sources;const x=j.choices?.[0]?.delta?.content;if(x){full+=x;if(clean(full))paint(bd,full);scrollChat()}}}
+    paint(bd,full,srcs);scrollChat();c.messages.push({role:'assistant',content:full,sources:srcs});actions(c);
   }catch(e){
     if(e.name==='AbortError'){if(full)c.messages.push({role:'assistant',content:full+' _[stopped]_'});paint(bd,full+' _[stopped]_',srcs)}
     else{const m=e.message==='AUTH'?'Session expire ho gaya. Dobara sign in karo.':e.message==='RATE'?'Bahut jaldi-jaldi messages. 1 minute ruko.':
@@ -265,7 +303,25 @@ async function status(){const d=$('dot'),t=$('stxt');
   try{const s=await(await fetch('/api/status')).json();d.className='dot '+(s.groq?'on':'off');t.textContent=s.groq?'Online · '+s.model:'Offline'}
   catch{d.className='dot wait';t.textContent='Server jag raha hai... (30-60 sec)'}}
 
+
+async function loadPreferences(){
+ try{const r=await api('/api/preferences');if(r.ok)userPrefs={...userPrefs,...await r.json()}}catch{}
+ $('prefMode').value=localStorage.getItem('deft_mode')||'';
+ $('prefNickname').value=userPrefs.nickname||'';$('prefTone').value=userPrefs.tone||'natural';
+ $('prefAbout').value=userPrefs.about||'';$('prefInstructions').value=userPrefs.instructions||'';
+}
+function openSettings(){settingsTab('general');$('settingsMsg').textContent='';loadPreferences();$('settingsModal').classList.add('open')}
+function closeSettings(){$('settingsModal').classList.remove('open')}
+function settingsTab(t){const p=t==='personal';$('paneGeneral').hidden=p;$('panePersonal').hidden=!p;$('tabGeneral').classList.toggle('on',!p);$('tabPersonal').classList.toggle('on',p)}
+async function savePreferences(){
+ const body={nickname:$('prefNickname').value.trim(),tone:$('prefTone').value,about:$('prefAbout').value.trim(),instructions:$('prefInstructions').value.trim()};
+ try{const r=await api('/api/preferences',{method:'PUT',body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw Error(j.error||'Save failed');
+ userPrefs=body;localStorage.setItem('deft_mode',$('prefMode').value);$('mode').value=$('prefMode').value;$('settingsMsg').textContent='Saved successfully.'}
+ catch(e){$('settingsMsg').textContent=e.message}
+}
+window.addEventListener('keydown',e=>{if(e.key==='Escape')closeSettings()});
+
 window.onload=()=>{document.querySelectorAll('i[data-i]').forEach(e=>e.outerHTML=ic(e.dataset.i));
   $('mode').value=localStorage.getItem('deft_mode')||'';status();setInterval(status,30000);
-  user=localStorage.getItem('deft_user')||'';if(token&&user)start()};
+  user=localStorage.getItem('deft_user')||'';if(token&&user){start();loadPreferences()}};
 </script></body></html>
