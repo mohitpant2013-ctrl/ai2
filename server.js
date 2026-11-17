@@ -180,7 +180,7 @@ const makeAdminToken = () => {
   const b = Buffer.from('admin|' + (Date.now() + 12 * 3600e3)).toString('base64url');
   return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url');
 };
-const DEFAULT_SETTINGS = { model: MODEL, visionModel: VISION, reasoningEffort: 'medium', maxCompletionTokens: 900, systemPrompt: '' };
+const DEFAULT_SETTINGS = { model: MODEL, visionModel: VISION, reasoningEffort: 'medium', maxCompletionTokens: 700, systemPrompt: '' };
 async function getSettings() { return { ...DEFAULT_SETTINGS, ...(await kvGet('settings:global') || {}) }; }
 function adminOnly(req, res) { if (!adminToken(req)) { res.status(401).json({ error: 'Admin login required' }); return false; } return true; }
 app.get('/control', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
@@ -196,7 +196,7 @@ app.put('/api/admin/settings', h(async (req, res) => {
   const body = req.body || {};
   const model = String(body.model || MODEL);
   const effort = ['low','medium','high'].includes(body.reasoningEffort) ? body.reasoningEffort : 'medium';
-  const max = Math.max(256, Math.min(900, Number(body.maxCompletionTokens) || 900));
+  const max = Math.max(256, Math.min(700, Number(body.maxCompletionTokens) || 700));
   const systemPrompt = String(body.systemPrompt || '').slice(0, 6000);
   await kvSet('settings:global', { model, visionModel: model, reasoningEffort: effort, maxCompletionTokens: max, systemPrompt });
   res.json({ ok: true });
@@ -254,40 +254,45 @@ const limited = ip => {
 
 
 const NAME = /^[a-zA-Z0-9_.]{3,20}$/;
-const ah = new Map();
-const authLimited = ip => { const n = Date.now(), a = (ah.get(ip) || []).filter(t => n - t < 60000); a.push(n); ah.set(ip, a); return a.length > 30; };
-
-app.post('/api/register', h(async (req, res) => {
-  if (authLimited(req.ip)) return res.status(429).json({ error: 'Too many sign-in attempts from this network. Please wait 60 seconds and try again.' });
-  const username = String(req.body.username || ''), password = String(req.body.password || '');
-  if (PASS && req.body.invite !== PASS) return res.status(403).json({ error: 'Invite code galat hai' });
-  if (!NAME.test(username)) return res.status(400).json({ error: 'Username 3-20 characters: letters, numbers, _ ya .' });
-  if (password.length < 6) return res.status(400).json({ error: 'Password kam se kam 6 characters ka rakho' });
-  if (req.body.legalAccepted !== true) return res.status(400).json({ error: 'Terms aur Privacy Policy accept karna zaroori hai.' });
-  const k = 'u:' + username.toLowerCase();
-  if (await kvGet(k)) return res.status(409).json({ error: 'Ye username le liya gaya hai' });
-  const salt = crypto.randomBytes(16).toString('hex');
-  await kvSet(k, { name: username, salt, hash: await scrypt(password, salt), at: Date.now(), legalAcceptedAt: new Date().toISOString(), legalVersion: '2026-11-17' });
-  res.json({ token: sign(username.toLowerCase()), username });
+const failedLogins = new Map(), registerAttempts = new Map(), registering = new Set();
+const recent = (map,key,ms) => (map.get(key)||[]).filter(t=>Date.now()-t<ms);
+const recordAttempt = (map,key,ms) => { const a=recent(map,key,ms); a.push(Date.now()); map.set(key,a); return a.length; };
+app.post('/api/register', h(async (req,res) => {
+ const username=String(req.body.username||'').trim(), password=String(req.body.password||'');
+ if(!NAME.test(username)) return res.status(400).json({error:'Username 3-20 characters: letters, numbers, _ ya .'});
+ if(password.length<6||password.length>128) return res.status(400).json({error:'Password 6-128 characters ka hona chahiye.'});
+ if(PASS&&req.body.invite!==PASS) return res.status(403).json({error:'Invite code galat hai'});
+ if(req.body.legalAccepted!==true) return res.status(400).json({error:'Terms aur Privacy Policy accept karna zaroori hai.'});
+ const ip=req.ip||'unknown', normalized=username.toLowerCase(), k='u:'+normalized;
+ if(recent(registerAttempts,ip,10*60e3).length>=12) return res.status(429).json({error:'Too many account-creation attempts from this network. Please wait a few minutes.'});
+ if(registering.has(k)) return res.status(409).json({error:'Account creation is already in progress for this username.'});
+ if(await kvGet(k)) return res.status(409).json({error:'Ye username le liya gaya hai'});
+ registering.add(k); recordAttempt(registerAttempts,ip,10*60e3);
+ try {
+  const salt=crypto.randomBytes(16).toString('hex'), hash=await scrypt(password,salt);
+  if(await kvGet(k)) return res.status(409).json({error:'Ye username le liya gaya hai'});
+  await kvSet(k,{name:username,salt,hash,at:Date.now(),legalAcceptedAt:new Date().toISOString(),legalVersion:'2026-11-17'});
+  res.json({token:sign(normalized),username});
+ } finally { registering.delete(k); }
+}));
+app.post('/api/login', h(async (req,res) => {
+ const username=String(req.body.username||'').trim(), password=String(req.body.password||''), key=(req.ip||'unknown')+':'+username.toLowerCase();
+ if(recent(failedLogins,key,10*60e3).length>=10) return res.status(429).json({error:'Too many incorrect passwords for this username. Wait 10 minutes, then try again.'});
+ const u=await kvGet('u:'+username.toLowerCase());
+ const bad=()=>{recordAttempt(failedLogins,key,10*60e3);return res.status(401).json({error:'Username ya password galat hai'});};
+ if(!u) return bad();
+ const a=Buffer.from(await scrypt(password,u.salt)), b=Buffer.from(u.hash);
+ if(a.length!==b.length||!crypto.timingSafeEqual(a,b)) return bad();
+ failedLogins.delete(key);
+ res.json({token:sign(username.toLowerCase()),username:u.name});
 }));
 
-app.post('/api/login', h(async (req, res) => {
-  if (authLimited(req.ip)) return res.status(429).json({ error: 'Bahut tries. 1 minute ruko.' });
-  const username = String(req.body.username || ''), password = String(req.body.password || '');
-  const u = await kvGet('u:' + username.toLowerCase());
-  const bad = () => res.status(401).json({ error: 'Username ya password galat hai' });
-  if (!u) return bad();
-  const a = Buffer.from(await scrypt(password, u.salt)), b = Buffer.from(u.hash);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return bad();
-  res.json({ token: sign(username.toLowerCase()), username: u.name });
-}));
 
-
-async function getUserPreferences(username){return {nickname:'',tone:'natural',about:'',instructions:'',language:'auto',voiceLang:'en-IN',...(await kvGet('prefs:'+username)||{})};}
+async function getUserPreferences(username){return {nickname:'',tone:'natural',about:'',instructions:'',language:'auto',voiceLang:'en-IN',mode:'',...(await kvGet('prefs:'+username)||{})};}
 app.get('/api/preferences',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});res.json(await getUserPreferences(u));}));
 app.put('/api/preferences',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const b=req.body||{};
- const prefs={nickname:String(b.nickname||'').trim().slice(0,40),tone:['natural','concise','detailed','stepwise'].includes(b.tone)?b.tone:'natural',about:'',instructions:String(b.instructions||'').trim().slice(0,1600),language:['auto','en','hi','pa','hinglish'].includes(b.language)?b.language:'auto',voiceLang:['en-IN','hi-IN','pa-IN'].includes(b.voiceLang)?b.voiceLang:'en-IN'};
+ const prefs={nickname:String(b.nickname||'').trim().slice(0,40),tone:['natural','concise','detailed','stepwise'].includes(b.tone)?b.tone:'natural',about:String(b.about||'').trim().slice(0,600),instructions:String(b.instructions||'').trim().slice(0,1200),language:['auto','en','hi','pa','hinglish'].includes(b.language)?b.language:'auto',voiceLang:['en-IN','hi-IN','pa-IN'].includes(b.voiceLang)?b.voiceLang:'en-IN',mode:['','teacher','coder','friend','short'].includes(b.mode)?b.mode:''};
  await kvSet('prefs:'+u,prefs);res.json({ok:true});
 }));
 
@@ -308,14 +313,15 @@ app.post('/api/chat', async (req, res) => {
   if (limited(req.ip)) return res.status(429).json({ error: 'Too many requests' });
 
   let hasImg = false;
-  const history = (Array.isArray(req.body.messages) ? req.body.messages : []).slice(-12).map(m => {
+  const history = (Array.isArray(req.body.messages) ? req.body.messages : []).slice(-7).map((m,index,arr) => {
     const role = m.role === 'assistant' ? 'assistant' : 'user';
     if (Array.isArray(m.content)) {
-      const parts = m.content.filter(p => p.type === 'text' || p.type === 'image_url').slice(0, 4);
+      const parts = m.content.filter(p => p && (p.type === 'text' || p.type === 'image_url')).slice(0, 2);
       if (parts.some(p => p.type === 'image_url')) hasImg = true;
       return { role, content: parts };
     }
-    return { role, content: String(m.content).slice(0, 30000) };
+    const raw=String(m.content||''), cap=index===arr.length-1&&role==='user'?7000:1800;
+    return { role, content: raw.slice(-cap) };
   });
 
   const ctrl = new AbortController();
@@ -331,29 +337,24 @@ app.post('/api/chat', async (req, res) => {
     const lastText = typeof last?.content === 'string' ? last.content : (last?.content || []).find(p => p.type === 'text')?.text || '';
     const settings = await getSettings();
     const preferences = await getUserPreferences(who(req));
-    const personalContext = [preferences.nickname?'Preferred name: '+preferences.nickname:'',preferences.about?'User context: '+preferences.about:'',preferences.instructions?'User custom instructions: '+preferences.instructions:'','IMPORTANT PERSONALIZATION — follow these user preferences in every answer: response style is '+({natural:'balanced and natural',concise:'short and direct',detailed:'detailed with explanations',stepwise:'step-by-step'}[preferences.tone]||'balanced and natural')+'. Preferred response language: '+({auto:'match the language of the latest user message',en:'English',hi:'Hindi',pa:'Punjabi written in Gurmukhi script',hinglish:'Hinglish'}[preferences.language]||'match the latest user message')+'.',preferences.nickname?'Address the user as '+preferences.nickname+' when natural.':'',preferences.instructions?'User instructions (follow unless unsafe or conflicting): '+preferences.instructions:'',preferences.language==='pa'?'MANDATORY: respond in natural Punjabi using Gurmukhi script. Do not answer in Hindi. Keep code, product names and technical terms as needed.':''].filter(Boolean).join('\n');
+    const personalContext = ['PERSONALIZATION (always apply):',preferences.nickname?'Preferred name: '+preferences.nickname:'',preferences.about?'About the user: '+preferences.about:'',preferences.instructions?'Custom instructions: '+preferences.instructions:'','Response style: '+({natural:'balanced and natural',concise:'short and direct',detailed:'detailed with explanations',stepwise:'step-by-step with numbered actions'}[preferences.tone]||'balanced and natural')+'.','Response language: '+({auto:'match the latest user message',en:'English',hi:'Hindi in Devanagari',pa:'Punjabi in Gurmukhi',hinglish:'natural Hinglish'}[preferences.language]||'match the latest user message')+'.',preferences.language==='pa'?'Punjabi language lock: answer in natural Punjabi (Gurmukhi), not Hindi.':'',preferences.instructions?'Follow custom instructions unless unsafe or conflicting.':''].filter(Boolean).join('\n');
     const docs = !hasImg ? await retrieveKnowledge(lastText) : [];
     let found = [];
     if (!hasImg && lastText.trim().length > 3) {
-      const [q, pages] = await Promise.all([
-        makeQuery(history, lastText),
-        readUrls(findUrls(lastText), send)
-      ]);
-      found = [...pages];
-      if (q) {
-        send({ status: 'Searching Reddit and official government sources only...' });
-        found = [...found, ...(await research(q))];
-      }
+      const explicitResearch = /\b(search|look\s*up|research|check\s*sources|latest|current|today|right\s*now|news|reddit|official|government|govt|scheme|policy|bill|election|price\s*today|recent)\b|ताज़ा|आज की|सरकारी|योजना|खबर|ਰੇਡਿਟ|ਅੱਜ ਦੀ|ਸਰਕਾਰੀ/i.test(lastText);
+      const [q,pages]=await Promise.all([explicitResearch?makeQuery(history,lastText):Promise.resolve(null),readUrls(findUrls(lastText),send)]);
+      found=[...pages];
+      if(q){send({status:'Searching Reddit and official government sources only...'});found=[...found,...(await research(q))];}
     }
     const combined = [...docs.map(d => ({ title: d.title, url: d.url || '', text: d.content })), ...found];
-    const unique = [...new Map(combined.filter(x => x.text).map(x => [x.url || x.title, x])).values()].slice(0, 8);
+    const unique = [...new Map(combined.filter(x => x.text).map(x => [x.url || x.title, x])).values()].slice(0, 4);
     if (unique.length) {
       send({ sources: unique.map(({ title, url }) => ({ title, url })) });
-      srcText = unique.map((x,i) => `[${i+1}] ${x.title}${x.url ? ' ('+x.url+')' : ''}\\n${String(x.text).slice(0,4000)}`).join('\\n\\n');
+      srcText = unique.map((x,i) => `[${i+1}] ${x.title}${x.url ? ' ('+x.url+')' : ''}\\n${String(x.text).slice(0,1200)}`).join('\\n\\n');
     }
     if (!unique.length && !hasImg) send({ status: 'No matching web pages or knowledge documents found; answering from model knowledge.' });
     const activeModel = settings.model || MODEL;
-    const maxTokens = Math.max(256, Math.min(900, Number(settings.maxCompletionTokens) || 900));
+    const maxTokens = Math.max(256, Math.min(700, Number(settings.maxCompletionTokens) || 700));
     const activeVision = settings.visionModel || activeModel;
     const creativeRequest = /\b(creative|creativity|brainstorm|ideas?|concepts?|design|story|storytelling|poem|joke|funny|original|unique|imagine|invent|script|thumbnail|video idea|content idea)\b/i.test(lastText);
     const r = await groq(

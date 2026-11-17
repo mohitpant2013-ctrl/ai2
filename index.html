@@ -191,6 +191,7 @@ body,#main,#side,#auth,#main{background:#000!important}
 <div id="panePersonal" class="setPane" hidden>
 <h2>Personalization</h2><p>Set how DeftAI should talk and respond. These preferences are saved to your account.</p>
 <label>Your name (optional)</label><input id="prefNickname" maxlength="40" placeholder="What should DeftAI call you?">
+<label>About you (optional)</label><textarea id="prefAbout" maxlength="600" rows="2" placeholder="Your interests, goals or context that helps DeftAI answer better."></textarea>
 <label>Response style</label><select id="prefTone"><option value="natural">Balanced</option><option value="concise">Short and direct</option><option value="detailed">Detailed explanations</option><option value="stepwise">Step by step</option></select>
 <label>Response language</label><select id="prefLanguage"><option value="auto">Automatic</option><option value="en">English</option><option value="hi">Hindi</option><option value="pa">Punjabi (Gurmukhi)</option><option value="hinglish">Hinglish</option></select>
 <label>Custom instructions (optional)</label><textarea id="prefInstructions" maxlength="1600" rows="4" placeholder="Example: Explain technical topics simply. Use examples."></textarea>
@@ -440,9 +441,10 @@ async function loadPreferences(){
   userPrefs={...userPrefs,...await r.json()};
   $('personalSaveStatus').textContent='Preferences loaded from your account.';
  }catch(e){$('personalSaveStatus').textContent=e.message}
- $('prefMode').value=localStorage.getItem('deft_mode')||'';
+ $('prefMode').value=userPrefs.mode!==undefined?userPrefs.mode:(localStorage.getItem('deft_mode')||'');
  $('mode').value=$('prefMode').value;
  $('prefNickname').value=userPrefs.nickname||'';
+ $('prefAbout').value=userPrefs.about||'';
  $('prefTone').value=userPrefs.tone||'natural';
  $('prefInstructions').value=userPrefs.instructions||'';
  $('prefLanguage').value=userPrefs.language||'auto';
@@ -461,7 +463,7 @@ function settingsTab(t){
 }
 async function savePreferences(){
  const btn=$('savePersonalBtn'),status=$('personalSaveStatus');
- const body={nickname:$('prefNickname').value.trim(),tone:$('prefTone').value,about:'',instructions:$('prefInstructions').value.trim(),language:$('prefLanguage').value,voiceLang:$('prefVoice').value};
+ const body={nickname:$('prefNickname').value.trim(),about:$('prefAbout').value.trim(),tone:$('prefTone').value,mode:$('prefMode').value,instructions:$('prefInstructions').value.trim(),language:$('prefLanguage').value,voiceLang:$('prefVoice').value};
  if(btn){btn.disabled=true;btn.textContent='Saving…'}status.textContent='Saving to your account…';
  try{
   const r=await api('/api/preferences',{method:'PUT',body:JSON.stringify(body)});
