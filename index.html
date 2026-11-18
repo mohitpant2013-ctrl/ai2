@@ -500,7 +500,7 @@ if('speechSynthesis' in window)speechSynthesis.addEventListener('voiceschanged',
 
 // ---- Model status ----
 async function status(){const d=$('dot'),t=$('stxt');
-  try{const s=await(await fetch('/api/status')).json();d.className='dot '+((s.gemini||s.openai||s.groq)?'on':'off');t.textContent=s.gemini?'Online · Gemini':s.geminiConfigured?'Gemini key error':(s.openai?'Online · ChatGPT':s.groq?'Online · DeftAI':'Offline');t.title=s.geminiError||''}
+  try{const s=await(await fetch('/api/status')).json();d.className='dot '+((s.gemini||s.openai||s.groq)?'on':'off');t.textContent=s.gemini?'Online · Gemini':s.geminiConfigured?'Gemini key error':(s.openai?'Online · ChatGPT':s.groq?'Online · DeftAI':'Offline');t.title=[s.geminiError||'',s.durableStorage?'Storage: durable':'Storage: temporary · add DATABASE_URL'].filter(Boolean).join('\\n')}
   catch{d.className='dot wait';t.textContent='Server jag raha hai... (30-60 sec)'}}
 
 
