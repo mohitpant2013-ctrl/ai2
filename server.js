@@ -4,7 +4,7 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '12mb' }));
 app.use((req,res,next)=>{
- if(req.path.startsWith('/api/')){
+ if(req.path.startsWith('/api/')&&req.path!=='/api/admin/live-logs'){
   const started=Date.now();
   res.on('finish',()=>console.info('[http]',req.method,req.path,res.statusCode,(Date.now()-started)+'ms'));
  }
