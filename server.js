@@ -15,7 +15,7 @@ const KEY = process.env.GROQ_API_KEY;
 const MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-const DEFT_EXTRA_MODEL = 'gemini-2.5-pro';
+const DEFT_EXTRA_MODEL = MODEL; // Deft-Extra is the original Groq/Qwen model
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
 const VISION = process.env.GROQ_VISION_MODEL || MODEL;
@@ -235,7 +235,7 @@ const makeAdminToken = () => {
   const b = Buffer.from('admin|' + (Date.now() + 12 * 3600e3)).toString('base64url');
   return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url');
 };
-const PROVIDER_MODELS=[...(KEY?[MODEL]:[]),...(GEMINI_API_KEY?[...new Set([GEMINI_MODEL,DEFT_EXTRA_MODEL])]:[])];
+const PROVIDER_MODELS=[...(GEMINI_API_KEY?[GEMINI_MODEL]:[]),...(KEY?[MODEL]:[])];
 const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL,visionModel:VISION,allowedModels:PROVIDER_MODELS,reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
 async function getSettings() {
  const saved=await kvGet('settings:global')||{};
@@ -375,18 +375,29 @@ app.post('/api/tts',h(async(req,res)=>{
 }));
 app.post('/api/image',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
- if(!GEMINI_API_KEY)return res.status(503).json({error:'Image generation is not configured. Add GEMINI_API_KEY in Render.'});
+ const accountId=process.env.CLOUDFLARE_ACCOUNT_ID||'',apiToken=process.env.CLOUDFLARE_API_TOKEN||'';
+ if(!accountId||!apiToken)return res.status(503).json({error:'Image generation is not configured. Add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in Render.'});
  const prompt=String(req.body.prompt||'').trim().slice(0,2000);if(prompt.length<3)return res.status(400).json({error:'Describe the image first.'});
  const cost=20,current=await userCredits(u);if(current.balance<cost)return res.status(402).json({error:'Not enough credits. Open Plans to request more.'});
- const model=process.env.GEMINI_IMAGE_MODEL||'gemini-nano-banana-2.1';
- await spendCredits(u,cost,'Image generation · '+model);
+ const model='@cf/black-forest-labs/flux-1-schnell';
+ await spendCredits(u,cost,'Image generation · Cloudflare FLUX.1 Schnell');
  let r;
- try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':GEMINI_API_KEY},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}}),signal:AbortSignal.timeout(90000)})}catch(e){await addCredits(u,cost,'Image generation refund · network failure');throw e}
- const body=await r.json().catch(()=>({}));if(!r.ok){const detail=String(body.error?.message||'No provider detail returned').slice(0,220);await addCredits(u,cost,'Image generation refund · provider error');console.error('Gemini image error:',r.status,body.error?.status||'UNKNOWN',detail);return res.status(502).json({error:'Gemini image error '+r.status+': '+detail+' Credits were refunded.'});}
- const part=(body.candidates?.[0]?.content?.parts||[]).find(p=>p.inlineData?.data);
- if(!part){await addCredits(u,cost,'Image generation refund · empty response');return res.status(502).json({error:'Gemini returned no image. Credits were refunded.'});}
- const data=part.inlineData.data,mime=part.inlineData.mimeType||'image/png';
- const c=await userCredits(u);res.json({ok:true,image:'data:'+mime+';base64,'+data,credits:c,cost});
+ try{
+  r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+encodeURIComponent(accountId)+'/ai/run/'+encodeURIComponent(model),{
+   method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+apiToken},
+   body:JSON.stringify({prompt,steps:4}),signal:AbortSignal.timeout(90000)
+  });
+ }catch(e){await addCredits(u,cost,'Image generation refund · network failure');throw e}
+ const body=await r.json().catch(()=>({}));
+ if(!r.ok||body.success===false){
+  const detail=String(body.errors?.[0]?.message||body.messages?.[0]?.message||'Cloudflare Workers AI request failed').slice(0,220);
+  await addCredits(u,cost,'Image generation refund · provider error');
+  console.error('Cloudflare image error:',r.status,detail);
+  return res.status(502).json({error:'Cloudflare image error '+r.status+': '+detail+' Credits were refunded.'});
+ }
+ const encoded=body.result?.image||body.result?.data?.[0]?.b64_json||'';
+ if(!encoded){await addCredits(u,cost,'Image generation refund · empty response');return res.status(502).json({error:'Cloudflare returned no image. Credits were refunded.'});}
+ const c=await userCredits(u);res.json({ok:true,image:'data:image/jpeg;base64,'+encoded,credits:c,cost,provider:'Cloudflare Workers AI',model});
 }));
 
 app.get('/api/admin/knowledge', h(async (req,res) => { if (!adminOnly(req,res)) return; res.json({ documents: (await kvGet('kb:documents')) || [] }); }));
