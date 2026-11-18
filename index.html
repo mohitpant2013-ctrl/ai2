@@ -169,7 +169,7 @@ body{background-color:var(--bg)!important}#main{background:transparent!important
   <div id="top"><button id="menu" class="ib" onclick="$('side').classList.toggle('open')"><i data-i="menu"></i></button>
     <span class="pill"><span class="dot wait" id="dot"></span><span id="stxt">Checking...</span></span><span id="syncStatus" class="fine" aria-live="polite" style="white-space:nowrap">Saved</span>
     <button onclick="openSettings()" title="Settings">⚙</button>
-    <a href="/upgrade" class="top-upgrade">✦ Upgrade <span id="creditCount">…</span></a><select id="modelChoice" aria-label="AI model" title="AI model" style="max-width:165px;min-width:120px"><option value="">Loading models…</option></select><select id="mode" onchange="localStorage.setItem('deft_mode',this.value)"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select></div>
+    <a href="/upgrade" class="top-upgrade">✦ Upgrade <span id="creditCount">…</span></a><select id="mode" onchange="localStorage.setItem('deft_mode',this.value)"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select></div>
   <div id="chat"><div class="wrap" id="msgs"></div></div>
   <div id="box"><div id="bar">
     <div id="pend"></div>
@@ -556,7 +556,7 @@ async function savePreferences(){
 let storeState={plans:[],contact:{},credits:{balance:0},models:[]};
 async function loadStore(){
  try{const r=await api('/api/store');if(!r.ok)return;storeState=await r.json();$('creditCount').textContent=storeState.credits.balance;$('storeBalance').textContent='Balance: '+storeState.credits.balance+' credits · Plan: '+storeState.credits.plan;
-  const sel=$('modelChoice'),old=sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m.startsWith('gemini-')?'Gemini · '+m.replace('gemini-',''):'DeftAI · '+m;sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;else if((storeState.models||[]).includes('gemini-3.8-flash'))sel.value='gemini-3.8-flash';
+  const sel=$('modelChoice'),old=sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m.startsWith('gemini-')?'Gemini · '+m.replace('gemini-',''):m.startsWith('gpt-')?'ChatGPT · '+m:'DeftAI · '+m;sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;else if((storeState.models||[]).includes('gemini-3.8-flash'))sel.value='gemini-3.8-flash';else if((storeState.models||[]).length)sel.value=storeState.models[0];
   renderPlans();
  }catch{}
 }
@@ -575,7 +575,7 @@ function renderPlans(){
 }
 async function requestPlan(id){
  try{const r=await api('/api/purchase-request',{method:'POST',body:JSON.stringify({planId:id})}),j=await r.json();if(!r.ok)throw Error(j.error||'Could not create request');
-  const c=j.contact||{};$('purchaseInfo').textContent=(j.alreadyPending?'You already have a pending request.\n':'Request sent.\n')+(c.message||'')+'\nDiscord: '+(c.discord||'Not set')+'\nPhone: '+(c.phone||'Not set')+'\n\nWait for the owner to review your request. Credits appear after approval.';
+  const c=j.contact||{},p=j.plan||{};$('purchaseInfo').textContent=(j.alreadyPending?'You already have a pending request.\n':'Request created.\n')+'Reference: '+(j.reference||j.requestId)+'\nPlan: '+(p.name||id)+' · '+(p.price||'')+' · '+(p.credits||'')+' credits\nStatus: Awaiting manual review\n\n'+(c.message||'')+'\nContact: '+(c.discord||'Not set')+' · '+(c.phone||'Not set')+'\n\nDo not send money until the owner and a parent/guardian confirm the payment details. Credits appear only after approval.';
  }catch(e){$('purchaseInfo').textContent=e.message}
 }
 async function generateImage(){
@@ -632,5 +632,38 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{an
 @media(max-width:760px){#settingsCard{grid-template-columns:66px minmax(0,1fr)!important}.settingsNav{padding:18px 7px!important}.settingsBrand{padding:0 7px 25px!important}.settingsBrand>div,.settingsNavLabel,.settingNavItem span,.settingsNavBottom span{display:none!important}.settingNavItem{justify-content:center;padding:12px 5px!important}.settingsContent{padding:22px 17px!important}#chat{padding-left:10px;padding-right:10px}#box{padding-left:8px;padding-right:8px}.u{max-width:94%}}
 @media(max-width:420px){.settingsTop h1{font-size:20px}.settingsContent{padding:16px 12px!important}.settingsFooter{flex-direction:column;align-items:stretch}.settingsFooter>div{width:100%}.settingsFooter button{flex:1}.sug{grid-template-columns:1fr}}
 @media(orientation:landscape) and (max-height:500px){#top{padding:5px 10px}#box{padding-bottom:4px}#bar{padding:5px}.fine{display:none}}
-.appearancePreview{position:relative;overflow:hidden;min-height:145px;border:1px solid var(--bd);border-radius:16px;padding:14px;margin:18px 0;background:var(--bg);color:var(--tx);box-shadow:0 12px 36px #0005}.previewTop{font-size:10px;letter-spacing:1.5px;opacity:.7}.previewBubble{margin:18px 0 8px auto;max-width:80%;padding:9px 13px;border-radius:16px;background:var(--hv);border:1px solid var(--bd);font-size:13px}.previewReply{max-width:88%;padding:10px 12px;border-radius:12px;background:var(--el);font-size:12px}.appearancePreview small{display:block;margin-top:12px;opacity:.65}.topAction{border:1px solid var(--bd);background:var(--el);color:var(--tx);border-radius:10px;padding:7px 11px;font-size:12px}.topAction.active{border-color:var(--ac);color:var(--ac)}.focus-mode #side{display:none!important}.focus-mode #main{width:100%}.density-compact .wrap{gap:14px}.density-spacious .wrap{gap:38px}#side,#top{background:var(--panel)}@media(max-width:760px){.topAction{padding:6px 8px;font-size:11px}}.personalSaveRow{display:flex;align-items:center;gap:12px;margin-top:18px;flex-wrap:wrap}.personalSaveRow button:disabled{opacity:.55;cursor:wait}#personalSaveStatus{font-size:12px;color:var(--mu);line-height:1.5}</style>
+.appearancePreview{position:relative;overflow:hidden;min-height:145px;border:1px solid var(--bd);border-radius:16px;padding:14px;margin:18px 0;background:var(--bg);color:var(--tx);box-shadow:0 12px 36px #0005}.previewTop{font-size:10px;letter-spacing:1.5px;opacity:.7}.previewBubble{margin:18px 0 8px auto;max-width:80%;padding:9px 13px;border-radius:16px;background:var(--hv);border:1px solid var(--bd);font-size:13px}.previewReply{max-width:88%;padding:10px 12px;border-radius:12px;background:var(--el);font-size:12px}.appearancePreview small{display:block;margin-top:12px;opacity:.65}.topAction{border:1px solid var(--bd);background:var(--el);color:var(--tx);border-radius:10px;padding:7px 11px;font-size:12px}.topAction.active{border-color:var(--ac);color:var(--ac)}.focus-mode #side{display:none!important}.focus-mode #main{width:100%}.density-compact .wrap{gap:14px}.density-spacious .wrap{gap:38px}#side,#top{background:var(--panel)}@media(max-width:760px){.topAction{padding:6px 8px;font-size:11px}}.personalSaveRow{display:flex;align-items:center;gap:12px;margin-top:18px;flex-wrap:wrap}.personalSaveRow button:disabled{opacity:.55;cursor:wait}#personalSaveStatus{font-size:12px;color:var(--mu);line-height:1.5}
+#composerTools{display:flex;align-items:center;gap:8px;padding:6px 8px 1px;border-top:1px solid var(--bd);margin-top:6px;color:var(--mu);font-size:11px}
+#composerTools label{font-size:11px;color:var(--mu)}
+#modelChoice{max-width:180px;min-width:118px;background:var(--el);color:var(--tx);border:1px solid var(--bd);border-radius:9px;padding:6px 9px;font:inherit;font-size:12px;outline:none}
+#modelChoice:focus{border-color:var(--ac);box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 18%,transparent)}
+#composerTools span{margin-left:auto;opacity:.7}
+#mode{max-width:110px;min-width:0}
+.top-upgrade{white-space:nowrap}
+@media(max-width:760px){
+ body{height:100dvh;overflow:hidden}
+ #main{width:100%;height:100dvh;min-width:0}
+ #top{padding:8px 9px;gap:6px;min-height:52px;flex-wrap:nowrap}
+ #top .pill{padding:4px 7px;font-size:10px;gap:5px}
+ #syncStatus{display:none!important}
+ #top>button{padding:6px 8px}
+ #mode{max-width:82px;font-size:11px;padding:5px 6px}
+ .top-upgrade{font-size:11px;padding:6px 7px}
+ #chat{padding:8px 10px 16px}
+ #box{padding:0 8px max(8px,env(safe-area-inset-bottom))}
+ #bar{padding:7px;border-radius:16px}
+ #row{gap:2px;align-items:flex-end}
+ #row>button{padding:7px 6px;min-width:32px}
+ #row textarea{min-width:0;font-size:16px;max-height:120px;padding:7px 4px}
+ #composerTools{gap:6px;padding:6px 4px 0}
+ #composerTools span{display:none}
+ #modelChoice{max-width:150px;min-width:0;flex:1}
+ #side{width:min(84vw,300px);padding:12px;max-width:300px}
+ .wrap{gap:18px}
+ .u{max-width:96%}
+ #empty{margin:8vh auto 0;padding:0 10px}
+ #empty h1{font-size:23px}
+}
+@media(max-width:390px){#top{gap:4px}#top .pill{max-width:84px;overflow:hidden}#mode{max-width:70px}#modelChoice{max-width:130px}}
+</style>
 </body></html>
