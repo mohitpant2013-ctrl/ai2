@@ -49,7 +49,7 @@ const SECRET = process.env.TOKEN_SECRET || crypto.createHash('sha256').update('d
 if(!process.env.TOKEN_SECRET)console.warn('TOKEN_SECRET is not set. Set a long random TOKEN_SECRET in Render to protect sessions; this fallback remains stable across provider-key changes.');
 
 // Simple local JSON storage. No Redis or external database required.
-const DATA_DIR=process.env.DATA_DIR||(process.env.RENDER?'/var/data':path.join(__dirname,'data'));
+const DATA_DIR=process.env.DATA_DIR||path.join(__dirname,'data');
 try{fs.mkdirSync(DATA_DIR,{recursive:true});}catch(e){console.error('Data directory unavailable:',e.message)}
 const FILE=path.join(DATA_DIR,'deftai-data.json');
 const LEGACY_FILE='/tmp/deftai-data.json';
@@ -235,13 +235,13 @@ const makeAdminToken = () => {
   const b = Buffer.from('admin|' + (Date.now() + 12 * 3600e3)).toString('base64url');
   return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url');
 };
-const PROVIDER_MODELS=GEMINI_API_KEY?[...new Set([GEMINI_MODEL,DEFT_EXTRA_MODEL])]:[];
+const PROVIDER_MODELS=[...(KEY?[MODEL]:[]),...(GEMINI_API_KEY?[...new Set([GEMINI_MODEL,DEFT_EXTRA_MODEL])]:[])];
 const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL,visionModel:VISION,allowedModels:PROVIDER_MODELS,reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
 async function getSettings() {
  const saved=await kvGet('settings:global')||{};
- const allowed=GEMINI_API_KEY?PROVIDER_MODELS:[];
+ const allowed=PROVIDER_MODELS;
  const savedModel=String(saved.model||GEMINI_MODEL);
- const model=allowed.includes(savedModel)?savedModel:(allowed[0]||GEMINI_MODEL);
+ const model=allowed.includes(savedModel)?savedModel:(GEMINI_API_KEY?GEMINI_MODEL:MODEL);
  return {...DEFAULT_SETTINGS,...saved,model,allowedModels:allowed};
 }
 async function appendAudit(event) {
@@ -422,7 +422,7 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/upgrade', (req, res) => res.sendFile(path.join(__dirname, 'upgrade.html')));
 app.get('/health', (req, res) => {
  let bytes=0,diskMounted=false;try{bytes=fs.statSync(FILE).size;diskMounted=fs.statSync(DATA_DIR).dev!==fs.statSync('/').dev}catch{}
- res.status(saveError?503:200).json({ok:!saveError,storage:saveError?'write-error':pool&&databaseReady?'postgres':diskMounted?'persistent-disk':'ephemeral',durableStorage:!!(pool&&databaseReady)||diskMounted,databaseReady,diskMounted,setupRequired:!((pool&&databaseReady)||diskMounted),recommendedMountPath:'/var/data',bytes,saveError:saveError||null});
+ res.status(saveError?503:200).json({ok:!saveError,storage:saveError?'write-error':pool&&databaseReady?'postgres':diskMounted?'persistent-disk':'local-ephemeral',durableStorage:!!(pool&&databaseReady)||diskMounted,databaseReady,diskMounted,setupRequired:!((pool&&databaseReady)||diskMounted),recommendedMountPath:'/var/data',bytes,saveError:saveError||null});
 });
 
 let st = { t: 0, v: null };
@@ -435,7 +435,7 @@ app.get('/api/status', async (req, res) => {
   } catch {}
   let geminiOk=false,geminiError='';
   if(GEMINI_API_KEY){try{const g=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(GEMINI_MODEL),{headers:{'x-goog-api-key':GEMINI_API_KEY},signal:AbortSignal.timeout(7000)});geminiOk=g.ok;if(!g.ok){const j=await g.json().catch(()=>({}));geminiError=String(j.error?.message||'Gemini model check failed').slice(0,180)}}catch(e){geminiError='Gemini API check timed out or could not connect'}}
-  st = { t: Date.now(), v: { server: true, groq: groqOk, gemini:geminiOk, geminiConfigured:!!GEMINI_API_KEY, geminiError, openai:!!OPENAI_API_KEY, model: GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL, vision: VISION, web: false, storage:pool&&databaseReady?'postgres':diskMounted()?'persistent-disk':'ephemeral', durableStorage:!!(pool&&databaseReady)||diskMounted() } };
+  st = { t: Date.now(), v: { server: true, groq: groqOk, gemini:geminiOk, geminiConfigured:!!GEMINI_API_KEY, geminiError, openai:!!OPENAI_API_KEY, model: GEMINI_API_KEY?GEMINI_MODEL:KEY?MODEL:OPENAI_MODEL, vision: VISION, web: false, storage:pool&&databaseReady?'postgres':diskMounted()?'persistent-disk':'ephemeral', durableStorage:!!(pool&&databaseReady)||diskMounted() } };
   res.json(st.v);
 });
 
@@ -457,7 +457,7 @@ app.post('/api/register',h(async(req,res)=>{
  const username=String(req.body.username||'').trim(),password=String(req.body.password||''),email=String(req.body.email||'').trim().toLowerCase();
  if(!NAME.test(username))return res.status(400).json({error:'Username 3-20 characters: letters, numbers, _ ya .'});
  if(email&&(!EMAIL.test(email)||email.length>254))return res.status(400).json({error:'Valid email address daalo, ya email field blank chhodo.'});
-  if(process.env.RENDER&&!pool&&!diskMounted())return res.status(503).json({error:'Account creation is paused to protect accounts from being lost on a Render restart. In Render → DeftLLM → Disks, attach a persistent disk mounted at /var/data, then redeploy. PostgreSQL DATABASE_URL is an alternative.'});
+ 
  if(password.length<8||password.length>128)return res.status(400).json({error:'Password 8-128 characters ka hona chahiye.'});
  if(req.body.legalAccepted!==true)return res.status(400).json({error:'Terms aur Privacy Policy accept karna zaroori hai.'});
  const ip=req.ip||'unknown',normalized=username.toLowerCase(),k='u:'+normalized;
