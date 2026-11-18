@@ -577,7 +577,7 @@ async function savePreferences(){
 let storeState={plans:[],contact:{},credits:{balance:0},models:[]};
 async function loadStore(){
  try{const r=await api('/api/store');if(!r.ok)return;storeState=await r.json();$('creditCount').textContent=storeState.credits.balance;$('storeBalance').textContent='Balance: '+storeState.credits.balance+' credits · Plan: '+storeState.credits.plan;
-  const sel=$('modelChoice'),old=localStorage.getItem('deft_model')||sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m==='gemini-2.5-pro'?'Deft-Extra · Gemini':m.startsWith('gemini-')?'DeftAI · Gemini':'DeftAI · Groq';sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;else if((storeState.models||[]).length)sel.value=storeState.models[0];localStorage.setItem('deft_model',sel.value);
+  const sel=$('modelChoice'),old=localStorage.getItem('deft_model')||sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m.startsWith('gemini-')?'DeftAI · Gemini':'Deft-Extra · Groq Qwen';sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;else if((storeState.models||[]).length)sel.value=storeState.models[0];localStorage.setItem('deft_model',sel.value);
   renderPlans();
  }catch{}
 }
@@ -600,7 +600,7 @@ async function requestPlan(id){
  }catch(e){$('purchaseInfo').textContent=e.message}
 }
 async function generateImage(){
- const promptText=prompt('Describe the image you want DeftAI to create:');if(!promptText?.trim())return;
+ const typed=$('inp')?.value?.trim()||'';const promptText=typed||prompt('Describe the image you want DeftAI to create:');if(!promptText?.trim())return;if(typed){$('inp').value='';$('inp').style.height='auto'}
  $('send').disabled=true;
  try{const r=await api('/api/image',{method:'POST',body:JSON.stringify({prompt:promptText})}),j=await r.json();if(!r.ok)throw Error(j.error||'Image generation failed');
   const c=getChat(),m={role:'assistant',content:'Generated image · '+j.cost+' credits'};c.messages.push(m);const el=addMsg(m),img=document.createElement('img');img.src=j.image;img.alt='AI generated image';img.style.cssText='display:block;max-width:100%;border-radius:12px;margin-top:10px';el.appendChild(img);save();loadStore();
