@@ -378,7 +378,8 @@ app.post('/api/image',h(async(req,res)=>{
  const cost=20,current=await userCredits(u);if(current.balance<cost)return res.status(402).json({error:'Not enough credits. Open Plans to request more.'});
  const model=process.env.GEMINI_IMAGE_MODEL||'gemini-nano-banana-2.1';
  await spendCredits(u,cost,'Image generation · '+model);
- const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':GEMINI_API_KEY},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}}),signal:AbortSignal.timeout(90000)});
+ let r;
+ try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':GEMINI_API_KEY},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}}),signal:AbortSignal.timeout(90000)})}catch(e){await addCredits(u,cost,'Image generation refund · network failure');throw e}
  const body=await r.json().catch(()=>({}));if(!r.ok){const detail=String(body.error?.message||'No provider detail returned').slice(0,220);await addCredits(u,cost,'Image generation refund · provider error');console.error('Gemini image error:',r.status,body.error?.status||'UNKNOWN',detail);return res.status(502).json({error:'Gemini image error '+r.status+': '+detail+' Credits were refunded.'});}
  const part=(body.candidates?.[0]?.content?.parts||[]).find(p=>p.inlineData?.data);
  if(!part){await addCredits(u,cost,'Image generation refund · empty response');return res.status(502).json({error:'Gemini returned no image. Credits were refunded.'});}
