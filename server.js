@@ -276,6 +276,17 @@ app.get('/api/admin/users',h(async(req,res)=>{
  const users=Object.keys(mem).filter(k=>k.startsWith('u:')).map(k=>{const u=mem[k]||{},name=u.name||k.slice(2),c=mem['credits:'+k.slice(2)]||{balance:300,plan:'Free'};return {username:name,email:u.email||'',createdAt:u.at||0,disabled:!!u.disabled,credits:c.balance,plan:c.plan||'Free'};}).sort((a,b)=>b.createdAt-a.createdAt);
  res.json({users});
 }));
+app.post('/api/admin/users/enable-all',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;
+ const keys=Object.keys(mem).filter(k=>k.startsWith('u:'));
+ let enabled=0;
+ for(const key of keys){
+  const u=await kvGet(key);
+  if(u&&u.disabled){u.disabled=false;await kvSet(key,u);enabled++;}
+ }
+ await appendAudit({type:'bulk_account_enable',detail:'Owner re-enabled '+enabled+' disabled account(s)'});
+ res.json({ok:true,enabled,total:keys.length});
+}));
 app.post('/api/admin/users/:username/status',h(async(req,res)=>{
  if(!adminOnly(req,res))return;
  const key='u:'+String(req.params.username||'').toLowerCase(),u=await kvGet(key);
