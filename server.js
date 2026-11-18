@@ -383,7 +383,7 @@ app.post('/api/image',h(async(req,res)=>{
  await spendCredits(u,cost,'Image generation · Cloudflare FLUX.1 Schnell');
  let r;
  try{
-  r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+encodeURIComponent(accountId)+'/ai/run/'+encodeURIComponent(model),{
+  r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+encodeURIComponent(accountId)+'/ai/run/'+model,{
    method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+apiToken},
    body:JSON.stringify({prompt,steps:4}),signal:AbortSignal.timeout(90000)
   });
