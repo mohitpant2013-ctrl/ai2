@@ -598,9 +598,10 @@ app.post('/api/chat', async (req, res) => {
       if(!OPENAI_API_KEY){send({error:'PROVIDER_ERROR',message:'OpenAI model selected but OPENAI_API_KEY is missing in Render environment variables.'});return res.end();}
       const or=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+OPENAI_API_KEY},body:JSON.stringify({model:activeModel,messages:[{role:'system',content:systemText},...history],stream:true,max_completion_tokens:maxTokens})});
       if(!or.ok){const detail=await or.text();console.error('OpenAI request failed:',or.status,detail.slice(0,350));send({error:'PROVIDER_ERROR',message:'OpenAI request failed (HTTP '+or.status+'). Check API key, model access and billing.'});return res.end();}
-      creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);await recordCreditEvent(ownerForCredits,-1,'Successful chat response',creditState.balance);
       const decoder=new TextDecoder();let pending='',assistantText='';
       for await(const chunk of or.body){res.write(chunk);pending+=decoder.decode(chunk,{stream:true});const frames=pending.split(/\r?\n/);pending=frames.pop()||'';for(const line of frames){if(!line.startsWith('data:'))continue;const data=line.slice(5).trim();if(!data||data==='[DONE]')continue;try{const part=JSON.parse(data)?.choices?.[0]?.delta?.content;if(typeof part==='string')assistantText=(assistantText+part).slice(-10000)}catch{}}}
+      if(!assistantText.trim()){send({error:'PROVIDER_ERROR',message:'OpenAI returned no text. No credits were deducted.'});return res.end()}
+      creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);await recordCreditEvent(ownerForCredits,-1,'Successful chat response',creditState.balance);
       const prefs=await getUserPreferences(ownerForCredits);
       await appendAudit(prefs.auditConsent===true?{type:'chat',username:ownerForCredits,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:assistantText}:{type:'chat_activity',username:ownerForCredits,detail:'Chat request completed; transcript not stored (no consent)'});
       return res.end();
@@ -649,6 +650,7 @@ app.post('/api/chat', async (req, res) => {
         } catch {}
       }
     }
+    if(assistantText.trim()){creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);await recordCreditEvent(ownerForCredits,-1,'Successful chat response',creditState.balance)}
     const account=who(req);
     if(account) {
       const prefs=await getUserPreferences(account);
