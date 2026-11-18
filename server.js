@@ -223,13 +223,13 @@ app.put('/api/admin/settings', h(async (req, res) => {
   const effort = ['low','medium','high'].includes(body.reasoningEffort) ? body.reasoningEffort : 'medium';
   const max = Math.max(256, Math.min(700, Number(body.maxCompletionTokens) || 700));
   const systemPrompt = String(body.systemPrompt || '').slice(0, 6000);
-  const allowedModels=[...new Set((Array.isArray(body.allowedModels)?body.allowedModels:String(body.allowedModels||'').split(/[\\n,]+/)).map(x=>String(x).trim()).filter(x=>/^[a-zA-Z0-9._/-]{3,100}$/.test(x)))].slice(0,20);
+  const allowedModels=[...new Set((Array.isArray(body.allowedModels)?body.allowedModels:String(body.allowedModels||'').split(String.fromCharCode(10)).flatMap(x=>x.split(','))).map(x=>String(x).trim()).filter(x=>/^[a-zA-Z0-9._/-]{3,100}$/.test(x)))].slice(0,20);
   const safeModels=allowedModels.length?allowedModels:[model],chosen=safeModels.includes(model)?model:safeModels[0];
   await kvSet('settings:global', { model:chosen, visionModel:String(body.visionModel||chosen).slice(0,100), allowedModels:safeModels, reasoningEffort:effort, maxCompletionTokens:max, systemPrompt });
   res.json({ ok: true });
 }));
 
-async function getCommerce(){return {...{plans:[{id:'starter',name:'Starter',price:'₹49',credits:500,description:'A small credit pack',active:true},{id:'pro',name:'Pro',price:'₹149',credits:2000,description:'More credits for regular use',active:true}],contact:{discord:'',phone:'',message:'Contact the owner to complete your purchase.'}},...(await kvGet('commerce:settings')||{})};}
+async function getCommerce(){return {...{plans:[],contact:{discord:'',phone:'',message:'Contact the owner to complete your purchase.'}},...(await kvGet('commerce:settings')||{})};}
 async function userCredits(username){let c=await kvGet('credits:'+username);if(!c){c={balance:100,plan:'Free',updatedAt:Date.now()};await kvSet('credits:'+username,c);}return c;}
 app.get('/api/store',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const cfg=await getCommerce(),settings=await getSettings(),credits=await userCredits(u);res.json({plans:(cfg.plans||[]).filter(p=>p.active),contact:cfg.contact,credits,models:settings.allowedModels||[settings.model||MODEL]});}));
 app.post('/api/purchase-request',h(async(req,res)=>{
@@ -394,6 +394,7 @@ app.post('/api/forgot-password',h(async(req,res)=>{
 app.post('/api/reset-password',h(async(req,res)=>{
  const email=String(req.body.email||'').trim().toLowerCase(),code=String(req.body.code||'').trim(),password=String(req.body.password||'');
  if(!EMAIL.test(email)||!(/^\d{6}$/.test(code))||password.length<8||password.length>128)return res.status(400).json({error:'Email, 6-digit code, or new password is invalid.'});
+ if(recordAttempt(authAttempts,'reset-code:'+(req.ip||'unknown')+':'+email,600000)>20)return res.status(429).json({error:'Too many reset-code attempts. Request a new code later.'});
  const reset=await kvGet('password-reset:'+email);
  if(!reset||reset.expiresAt<Date.now())return res.status(400).json({error:'Reset code expired or invalid. Request a new one.'});
  if(!crypto.timingSafeEqual(Buffer.from(codeHash(code)),Buffer.from(reset.codeHash)))return res.status(400).json({error:'Reset code incorrect hai.'});
