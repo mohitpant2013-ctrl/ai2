@@ -6,10 +6,12 @@ app.use(express.json({ limit: '12mb' }));
 
 const KEY = process.env.GROQ_API_KEY;
 const MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 const VISION = process.env.GROQ_VISION_MODEL || MODEL;
 const PASS = process.env.ACCESS_PASSWORD || '';
 const TAVILY = process.env.TAVILY_API_KEY || ''; // optional: full web search
-const FALLBACK = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'];
+const FALLBACK = [];
 const G = 'https://api.groq.com/openai/v1';
 const UA = { 'User-Agent': 'DeftAI/1.0 (personal chat app)' };
 const RESEND_API_KEY=process.env.RESEND_API_KEY||'',RESEND_FROM=process.env.RESEND_FROM||'DeftAI <onboarding@resend.dev>';
@@ -32,17 +34,21 @@ const fs = require('fs');
 const SECRET = process.env.TOKEN_SECRET || (KEY || '') + PASS + 'deftai';
 
 // Simple local JSON storage. No Redis or external database required.
-const DATA_DIR=process.env.DATA_DIR||'/tmp';
+const DATA_DIR=process.env.DATA_DIR||(process.env.RENDER?'/var/data':path.join(__dirname,'data'));
 try{fs.mkdirSync(DATA_DIR,{recursive:true});}catch{}
 const FILE=path.join(DATA_DIR,'deftai-data.json');
 let mem = {}; try { mem = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
-let wt;
+let saveError='';
 const persist = () => {
-  clearTimeout(wt);
-  wt = setTimeout(() => {
-    try { fs.writeFileSync(FILE, JSON.stringify(mem)); }
-    catch (e) { console.error('Local data save failed:', e.message); }
-  }, 300);
+  try {
+    const temp=FILE+'.tmp';
+    fs.writeFileSync(temp,JSON.stringify(mem));
+    fs.renameSync(temp,FILE);
+    saveError='';
+  } catch(e) {
+    saveError=e.message;
+    console.error('Persistent data save failed:',e.message);
+  }
 };
 async function kvGet(k) { return mem[k] ?? null; }
 async function kvSet(k, v) { mem[k] = v; persist(); }
@@ -197,8 +203,13 @@ const makeAdminToken = () => {
   const b = Buffer.from('admin|' + (Date.now() + 12 * 3600e3)).toString('base64url');
   return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url');
 };
-const DEFAULT_SETTINGS = { model:MODEL,visionModel:VISION,allowedModels:[MODEL,'openai/gpt-oss-20b','openai/gpt-oss-120b'],reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
-async function getSettings() { return { ...DEFAULT_SETTINGS, ...(await kvGet('settings:global') || {}) }; }
+const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:MODEL,visionModel:VISION,allowedModels:[MODEL,GEMINI_MODEL],reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
+async function getSettings() {
+ const saved=await kvGet('settings:global')||{};
+ const allowed=(Array.isArray(saved.allowedModels)?saved.allowedModels:DEFAULT_SETTINGS.allowedModels).filter(x=>!String(x).startsWith('openai/'));
+ const model=String(saved.model||DEFAULT_SETTINGS.model).startsWith('openai/')?DEFAULT_SETTINGS.model:(saved.model||DEFAULT_SETTINGS.model);
+ return {...DEFAULT_SETTINGS,...saved,model,allowedModels:allowed.length?allowed:DEFAULT_SETTINGS.allowedModels};
+}
 async function appendAudit(event) {
   const now=Date.now(), cutoff=now-30*864e5;
   const old=(await kvGet('audit:events'))||[];
@@ -217,9 +228,14 @@ app.get('/api/admin/settings', h(async (req, res) => { if (!adminOnly(req,res)) 
 
 app.get('/api/admin/live-logs',(req,res)=>{
  if(!adminOnly(req,res))return;
- res.setHeader('Content-Type','text/event-stream');res.setHeader('Cache-Control','no-cache, no-transform');res.setHeader('Connection','keep-alive');res.flushHeaders?.();
- res.write('data: '+JSON.stringify({type:'snapshot',logs:liveLogBuffer.slice(0,100)})+'\n\n');
- liveLogClients.add(res);req.on('close',()=>liveLogClients.delete(res));
+ const since=Number(req.query.since)||0;
+ res.setHeader('Cache-Control','no-store');
+ res.json({logs:liveLogBuffer.filter(x=>x.at>since).slice(-120),latest:liveLogBuffer[0]?.at||since,connected:true});
+});
+app.get('/api/admin/storage', (req,res)=>{
+ if(!adminOnly(req,res))return;
+ let bytes=0;try{bytes=fs.statSync(FILE).size}catch{}
+ res.json({directory:DATA_DIR,file:FILE,bytes,render:!!process.env.RENDER,persistentDiskConfigured:DATA_DIR.startsWith('/var/data'),saveError});
 });
 app.get('/api/admin/users',h(async(req,res)=>{
  if(!adminOnly(req,res))return;
@@ -252,7 +268,7 @@ app.put('/api/admin/settings', h(async (req, res) => {
   const effort = ['low','medium','high'].includes(body.reasoningEffort) ? body.reasoningEffort : 'medium';
   const max = Math.max(256, Math.min(900, Number(body.maxCompletionTokens) || 700));
   const systemPrompt = String(body.systemPrompt || '').slice(0, 6000);
-  const allowedModels=[...new Set((Array.isArray(body.allowedModels)?body.allowedModels:String(body.allowedModels||'').split(String.fromCharCode(10)).flatMap(x=>x.split(','))).map(x=>String(x).trim()).filter(x=>/^[a-zA-Z0-9._/-]{3,100}$/.test(x)))].slice(0,20);
+  const allowedModels=[...new Set((Array.isArray(body.allowedModels)?body.allowedModels:String(body.allowedModels||'').split(String.fromCharCode(10)).flatMap(x=>x.split(','))).map(x=>String(x).trim()).filter(x=>/^[a-zA-Z0-9._/-]{3,100}$/.test(x)&&!x.startsWith('openai/')))].slice(0,20);
   const safeModels=allowedModels.length?allowedModels:[model],chosen=safeModels.includes(model)?model:safeModels[0];
   await kvSet('settings:global', { model:chosen, visionModel:String(body.visionModel||chosen).slice(0,100), allowedModels:safeModels, reasoningEffort:effort, maxCompletionTokens:max, systemPrompt });
   res.json({ ok: true });
@@ -361,7 +377,7 @@ app.get('/api/status', async (req, res) => {
     const r = await fetch(G + '/models', { headers: { Authorization: 'Bearer ' + KEY }, signal: AbortSignal.timeout(5000) });
     groqOk = r.ok;
   } catch {}
-  st = { t: Date.now(), v: { server: true, groq: groqOk, model: MODEL, vision: VISION, web: false } };
+  st = { t: Date.now(), v: { server: true, groq: groqOk, gemini:!!GEMINI_API_KEY, model: GEMINI_API_KEY?GEMINI_MODEL:MODEL, vision: VISION, web: false } };
   res.json(st.v);
 });
 
@@ -543,9 +559,25 @@ app.post('/api/chat', async (req, res) => {
     const maxTokens = Math.max(256, Math.min(900, Number(settings.maxCompletionTokens) || 700));
     const activeVision = settings.visionModel || activeModel;
     const creativeRequest = /\b(creative|creativity|brainstorm|ideas?|concepts?|design|story|storytelling|poem|joke|funny|original|unique|imagine|invent|script|thumbnail|video idea|content idea)\b/i.test(lastText);
-    const r = await groq(
-      { messages: [{ role: 'system', content: sysPrompt(hasImg ? activeVision : activeModel, srcText, req.body.mode, [settings.systemPrompt,personalContext,projectContext].filter(Boolean).join('\n')) }, ...history], stream: true, temperature: creativeRequest ? 0.88 : 0.65, max_completion_tokens: maxTokens },
-      hasImg ? [...new Set([activeVision, ...FALLBACK])] : [...new Set([activeModel, ...FALLBACK])], ctrl.signal, settings.reasoningEffort || 'medium');
+    const systemText=sysPrompt(hasImg ? activeVision : activeModel, srcText, req.body.mode, [settings.systemPrompt,personalContext,projectContext].filter(Boolean).join('\n'));
+    let r;
+    if(activeModel.startsWith('gemini-')&&!hasImg){
+      if(!GEMINI_API_KEY){send({error:'PROVIDER_ERROR',message:'Gemini is selected but GEMINI_API_KEY is missing in Render environment variables.'});return res.end();}
+      const contents=history.map(m=>({role:m.role==='assistant'?'model':'user',parts:Array.isArray(m.content)?m.content.map(p=>p.type==='text'?{text:p.text||''}:p.type==='image_url'?{text:'[Image attached]'}:{text:''}):[{text:String(m.content||'')}]}));
+      const gr=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(activeModel)+':generateContent?key='+encodeURIComponent(GEMINI_API_KEY),{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:systemText}]},contents,generationConfig:{temperature:creativeRequest?0.88:0.65,maxOutputTokens:maxTokens}})});
+      const gj=await gr.json().catch(()=>({}));
+      if(!gr.ok){console.error('Gemini request failed:',gr.status,JSON.stringify(gj).slice(0,350));send({error:'PROVIDER_ERROR',message:'Gemini provider failed (HTTP '+gr.status+'). Check model access and API key.'});return res.end();}
+      const answer=(gj.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
+      if(!answer){send({error:'PROVIDER_ERROR',message:'Gemini returned an empty response.'});return res.end();}
+      creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);
+      send({choices:[{delta:{content:answer}}]});
+      const prefs=await getUserPreferences(ownerForCredits);
+      await appendAudit(prefs.auditConsent===true?{type:'chat',username:ownerForCredits,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:answer}:{type:'chat_activity',username:ownerForCredits,detail:'Chat request completed; transcript not stored (no consent)'});
+      return res.end();
+    }
+    r = await groq(
+      { messages: [{ role: 'system', content: systemText }, ...history], stream: true, temperature: creativeRequest ? 0.88 : 0.65, max_completion_tokens: maxTokens },
+      hasImg ? [...new Set([activeVision, ...FALLBACK])] : [activeModel], ctrl.signal, settings.reasoningEffort || 'medium');
     if (!r.ok) {
       const raw = await r.text();
       if (r.status === 429 || /rate.?limit|tokens per minute|quota/i.test(raw)) {
