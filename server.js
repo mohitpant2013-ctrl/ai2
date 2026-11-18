@@ -290,6 +290,15 @@ app.put('/api/admin/settings', h(async (req, res) => {
 
 async function getCommerce(){const defaults={version:2,plans:[{id:'free',name:'Free',price:'₹0 / month',credits:300,description:'Starter access with 300 credits.',active:true},{id:'core',name:'Core',price:'₹99 / month',credits:1800,description:'Everyday use with 1,800 monthly credits.',active:true},{id:'core-plus',name:'Core+',price:'₹199 / month',credits:5000,description:'More room with 5,000 monthly credits.',active:true},{id:'pro',name:'Pro',price:'₹399 / month',credits:12000,description:'Heavy use with 12,000 monthly credits.',active:true},{id:'pro-plus',name:'Pro+',price:'₹799 / month',credits:30000,description:'Maximum access with 30,000 monthly credits.',active:true}],contact:{discord:'',phone:'',message:'Choose a plan to submit a request. Monthly renewals and credit top-ups are handled manually after owner approval.'}};const saved=await kvGet('commerce:settings')||{};return {...defaults,...saved,plans:saved.version>=2&&Array.isArray(saved.plans)?saved.plans:defaults.plans};}
 async function userCredits(username){let c=await kvGet('credits:'+username);if(!c){c={balance:300,plan:'Free',updatedAt:Date.now()};await kvSet('credits:'+username,c);}return c;}
+async function recordCreditEvent(username,delta,reason,balance){
+ const key='credit-ledger:'+username,items=(await kvGet(key))||[];
+ items.unshift({id:crypto.randomUUID(),at:Date.now(),delta,reason:String(reason||'Credit update').slice(0,100),balance});
+ await kvSet(key,items.slice(0,100));
+}
+app.get('/api/credits/history',h(async(req,res)=>{
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
+ res.json({history:(await kvGet('credit-ledger:'+u)||[]).slice(0,30)});
+}));
 app.get('/api/store',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const cfg=await getCommerce(),settings=await getSettings(),credits=await userCredits(u);res.json({plans:(cfg.plans||[]).filter(p=>p.active),contact:cfg.contact,credits,models:settings.allowedModels||[settings.model||MODEL]});}));
 app.post('/api/purchase-request',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const id=String(req.body.planId||''),cfg=await getCommerce(),plan=(cfg.plans||[]).find(p=>p.id===id&&p.active);
@@ -311,7 +320,7 @@ app.get('/api/admin/purchase-requests',h(async(req,res)=>{if(!adminOnly(req,res)
 app.post('/api/admin/purchase-requests/:id/approve',h(async(req,res)=>{
  if(!adminOnly(req,res))return;const requests=(await kvGet('purchase:requests'))||[],r=requests.find(x=>x.id===req.params.id);
  if(!r)return res.status(404).json({error:'Request not found.'});if(r.status!=='pending')return res.status(409).json({error:'Request already reviewed.'});
- const c=await userCredits(r.username);c.balance=Math.min(10000000,c.balance+r.credits);c.plan=r.planName;c.updatedAt=Date.now();await kvSet('credits:'+r.username,c);
+ const c=await userCredits(r.username);c.balance=Math.min(10000000,c.balance+r.credits);c.plan=r.planName;c.updatedAt=Date.now();await kvSet('credits:'+r.username,c);await recordCreditEvent(r.username,r.credits,'Plan approved · '+r.planName,c.balance);
  r.status='approved';r.reviewedAt=Date.now();await kvSet('purchase:requests',requests);await appendAudit({type:'purchase_approved',username:r.username,detail:r.planName+' · '+r.credits+' credits'});res.json({ok:true,credits:c});
 }));
 app.post('/api/admin/purchase-requests/:id/reject',h(async(req,res)=>{
@@ -323,7 +332,7 @@ app.post('/api/admin/credits',h(async(req,res)=>{
  if(!adminOnly(req,res))return;const username=String(req.body.username||'').toLowerCase(),amount=Math.floor(Number(req.body.amount)||0);
  if(!username||!Number.isFinite(amount)||amount===0||Math.abs(amount)>1000000)return res.status(400).json({error:'Valid username and non-zero credit amount required.'});
  if(!await kvGet('u:'+username))return res.status(404).json({error:'User not found.'});
- const c=await userCredits(username);c.balance=Math.max(0,Math.min(10000000,c.balance+amount));c.updatedAt=Date.now();await kvSet('credits:'+username,c);res.json({ok:true,credits:c});
+ const c=await userCredits(username);c.balance=Math.max(0,Math.min(10000000,c.balance+amount));c.updatedAt=Date.now();await kvSet('credits:'+username,c);await recordCreditEvent(username,amount,'Owner adjustment',c.balance);res.json({ok:true,credits:c});
 }));
 
 const AZURE_SPEECH_KEY=process.env.AZURE_SPEECH_KEY||'',AZURE_SPEECH_REGION=process.env.AZURE_SPEECH_REGION||'centralindia';
@@ -351,7 +360,7 @@ app.post('/api/image',h(async(req,res)=>{
  const part=(body.candidates?.[0]?.content?.parts||[]).find(p=>p.inlineData?.data);
  if(!part)return res.status(502).json({error:'Gemini returned no image. Credits were not deducted.'});
  const data=part.inlineData.data,mime=part.inlineData.mimeType||'image/png';
- c.balance-=cost;c.updatedAt=Date.now();await kvSet('credits:'+u,c);res.json({ok:true,image:'data:'+mime+';base64,'+data,credits:c,cost});
+ c.balance-=cost;c.updatedAt=Date.now();await kvSet('credits:'+u,c);await recordCreditEvent(u,-cost,'Image generation · '+model,c.balance);res.json({ok:true,image:'data:'+mime+';base64,'+data,credits:c,cost});
 }));
 
 app.get('/api/admin/knowledge', h(async (req,res) => { if (!adminOnly(req,res)) return; res.json({ documents: (await kvGet('kb:documents')) || [] }); }));
@@ -589,7 +598,7 @@ app.post('/api/chat', async (req, res) => {
       if(!OPENAI_API_KEY){send({error:'PROVIDER_ERROR',message:'OpenAI model selected but OPENAI_API_KEY is missing in Render environment variables.'});return res.end();}
       const or=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+OPENAI_API_KEY},body:JSON.stringify({model:activeModel,messages:[{role:'system',content:systemText},...history],stream:true,max_completion_tokens:maxTokens})});
       if(!or.ok){const detail=await or.text();console.error('OpenAI request failed:',or.status,detail.slice(0,350));send({error:'PROVIDER_ERROR',message:'OpenAI request failed (HTTP '+or.status+'). Check API key, model access and billing.'});return res.end();}
-      creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);
+      creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);await recordCreditEvent(ownerForCredits,-1,'Successful chat response',creditState.balance);
       const decoder=new TextDecoder();let pending='',assistantText='';
       for await(const chunk of or.body){res.write(chunk);pending+=decoder.decode(chunk,{stream:true});const frames=pending.split(/\r?\n/);pending=frames.pop()||'';for(const line of frames){if(!line.startsWith('data:'))continue;const data=line.slice(5).trim();if(!data||data==='[DONE]')continue;try{const part=JSON.parse(data)?.choices?.[0]?.delta?.content;if(typeof part==='string')assistantText=(assistantText+part).slice(-10000)}catch{}}}
       const prefs=await getUserPreferences(ownerForCredits);
