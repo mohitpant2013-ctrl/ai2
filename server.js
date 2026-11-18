@@ -214,7 +214,7 @@ const makeAdminToken = () => {
   const b = Buffer.from('admin|' + (Date.now() + 12 * 3600e3)).toString('base64url');
   return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url');
 };
-const PROVIDER_MODELS=[MODEL,...(GEMINI_API_KEY?[GEMINI_MODEL]:[]),...(OPENAI_API_KEY?[OPENAI_MODEL,'gpt-5.4']:[])];
+const PROVIDER_MODELS=[...(KEY?[MODEL]:[]),...(GEMINI_API_KEY?[GEMINI_MODEL]:[]),...(OPENAI_API_KEY?[OPENAI_MODEL,'gpt-5.4']:[])];
 const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:MODEL,visionModel:VISION,allowedModels:PROVIDER_MODELS,reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
 async function getSettings() {
  const saved=await kvGet('settings:global')||{};
@@ -293,7 +293,7 @@ app.post('/api/purchase-request',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const id=String(req.body.planId||''),cfg=await getCommerce(),plan=(cfg.plans||[]).find(p=>p.id===id&&p.active);
  if(!plan)return res.status(404).json({error:'Plan not found or unavailable.'});
  const requests=(await kvGet('purchase:requests'))||[],existing=requests.find(x=>x.username===u&&x.planId===id&&x.status==='pending');
- if(existing)return res.json({ok:true,requestId:existing.id,contact:cfg.contact,alreadyPending:true});
+ if(existing)return res.json({ok:true,requestId:existing.id,reference:existing.reference,plan:{name:existing.planName,price:existing.price,credits:existing.credits},paymentStatus:existing.paymentStatus||'awaiting_manual_review',contact:cfg.contact,alreadyPending:true});
  const requestId=crypto.randomUUID(),reference='DFT-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(2).toString('hex').toUpperCase();
   const request={id:requestId,reference,username:u,planId:plan.id,planName:plan.name,price:plan.price,credits:plan.credits,status:'pending',paymentStatus:'awaiting_manual_review',createdAt:Date.now()};
  requests.unshift(request);await kvSet('purchase:requests',requests.slice(0,300));await appendAudit({type:'purchase_request',username:u,detail:'Purchase request: '+plan.name});res.json({ok:true,requestId:request.id,reference:request.reference,plan:{name:plan.name,price:plan.price,credits:plan.credits},paymentStatus:request.paymentStatus,contact:cfg.contact});
@@ -514,7 +514,7 @@ app.put('/api/chats', h(async (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
   if (!who(req)) return res.status(401).json({ error: 'Login karo' });
-  if (!KEY) return res.status(500).json({ error: 'GROQ_API_KEY set nahi hai' });
+  if (!KEY&&!GEMINI_API_KEY&&!OPENAI_API_KEY) return res.status(503).json({ error: 'Add at least one provider key: GROQ_API_KEY, GEMINI_API_KEY or OPENAI_API_KEY.' });
   if (limited(req.ip)) return res.status(429).json({ error: 'Too many requests' });
 
   let hasImg = false;
