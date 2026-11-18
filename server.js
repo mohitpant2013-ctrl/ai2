@@ -633,16 +633,28 @@ app.post('/api/chat', async (req, res) => {
     }
     if(activeModel.startsWith('gemini-')){
       if(!GEMINI_API_KEY){send({error:'PROVIDER_ERROR',message:'Gemini is selected but GEMINI_API_KEY is missing in Render environment variables.'});return res.end();}
-      const contents=history.map(m=>({role:m.role==='assistant'?'model':'user',parts:Array.isArray(m.content)?m.content.map(p=>{if(p.type==='text')return {text:p.text||''};if(p.type==='image_url'){const raw=p.image_url?.url||'',match=raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);return match?{inlineData:{mimeType:match[1],data:match[2]}}:{text:'[Image omitted: unsupported URL format]'}}return {text:''}}):[{text:String(m.content||'')}]}));
-      const gr=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(activeModel)+':generateContent',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json','x-goog-api-key':GEMINI_API_KEY},body:JSON.stringify({systemInstruction:{parts:[{text:systemText}]},contents,generationConfig:{temperature:creativeRequest?0.88:0.65,maxOutputTokens:maxTokens}})});
-      const gj=await gr.json().catch(()=>({}));
-      if(!gr.ok){const detail=String(gj.error?.message||'No provider detail returned').slice(0,220),code=gj.error?.status||gj.error?.code||'UNKNOWN';console.error('Gemini request failed:',gr.status,code,detail);send({error:'PROVIDER_ERROR',message:'Gemini error '+gr.status+' ('+code+'): '+detail});return res.end();}
-      const answer=(gj.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
-      if(!answer){send({error:'PROVIDER_ERROR',message:'Gemini returned an empty response.'});return res.end();}
+      const contents=history.map(m=>({role:m.role==='assistant'?'model':'user',parts:Array.isArray(m.content)?m.content.map(p=>{if(p.type==='text')return {text:p.text||''};if(p.type==='image_url'){const raw=p.image_url?.url||'',match=raw.match(/^data:(image\\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);return match?{inlineData:{mimeType:match[1],data:match[2]}}:{text:'[Image omitted: unsupported URL format]'}}return {text:''}}):[{text:String(m.content||'')}]}));
+      const endpoint='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(activeModel)+':streamGenerateContent?alt=sse';
+      const gr=await fetch(endpoint,{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json','x-goog-api-key':GEMINI_API_KEY},body:JSON.stringify({systemInstruction:{parts:[{text:systemText}]},contents,generationConfig:{temperature:creativeRequest?0.88:0.65,maxOutputTokens:maxTokens}})});
+      if(!gr.ok){const gj=await gr.json().catch(()=>({})),detail=String(gj.error?.message||'No provider detail returned').slice(0,240),code=gj.error?.status||gj.error?.code||'UNKNOWN';console.error('Gemini request failed:',gr.status,code,detail);send({error:'PROVIDER_ERROR',message:'Gemini error '+gr.status+' ('+code+'): '+detail});return res.end();}
+      let pending='',assistantText='';const decoder=new TextDecoder();
+      for await(const chunk of gr.body){
+        pending+=decoder.decode(chunk,{stream:true});
+        const frames=pending.split(/\\r?\\n/);pending=frames.pop()||'';
+        for(const line of frames){
+          if(!line.startsWith('data:'))continue;
+          const data=line.slice(5).trim();if(!data)continue;
+          try{
+            const parts=JSON.parse(data)?.candidates?.[0]?.content?.parts||[];
+            for(const part of parts){if(typeof part.text==='string'&&part.text){assistantText=(assistantText+part.text).slice(-12000);send({choices:[{delta:{content:part.text}}]});}}
+          }catch(e){console.warn('Gemini stream frame parse skipped:',e.message)}
+        }
+      }
+      if(pending.startsWith('data:')){try{const parts=JSON.parse(pending.slice(5).trim())?.candidates?.[0]?.content?.parts||[];for(const part of parts){if(typeof part.text==='string'&&part.text){assistantText=(assistantText+part.text).slice(-12000);send({choices:[{delta:{content:part.text}}]})}}}catch{}}
+      if(!assistantText.trim()){send({error:'PROVIDER_ERROR',message:'Gemini returned no text. Check the selected model and API usage limits.'});return res.end();}
       await spendCredits(ownerForCredits,1,'Successful chat response');
-      send({choices:[{delta:{content:answer}}]});
       const prefs=await getUserPreferences(ownerForCredits);
-      await appendAudit(prefs.auditConsent===true?{type:'chat',username:ownerForCredits,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:answer}:{type:'chat_activity',username:ownerForCredits,detail:'Chat request completed; transcript not stored (no consent)'});
+      appendAudit(prefs.auditConsent===true?{type:'chat',username:ownerForCredits,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:assistantText}:{type:'chat_activity',username:ownerForCredits,detail:'Chat request completed; transcript not stored (no consent)'}).catch(e=>console.warn('Chat audit skipped:',e.message));
       return res.end();
     }
     r = await groq(
