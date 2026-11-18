@@ -215,7 +215,7 @@ const makeAdminToken = () => {
   return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url');
 };
 const PROVIDER_MODELS=[...(KEY?[MODEL]:[]),...(GEMINI_API_KEY?[GEMINI_MODEL]:[]),...(OPENAI_API_KEY?[OPENAI_MODEL,'gpt-5.4']:[])];
-const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:MODEL,visionModel:VISION,allowedModels:PROVIDER_MODELS,reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
+const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL,visionModel:VISION,allowedModels:PROVIDER_MODELS,reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
 async function getSettings() {
  const saved=await kvGet('settings:global')||{};
  const allowed=[...new Set([...(Array.isArray(saved.allowedModels)?saved.allowedModels.filter(x=>!String(x).startsWith('openai/')):[]),...PROVIDER_MODELS])];
