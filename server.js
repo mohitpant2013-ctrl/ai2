@@ -40,6 +40,9 @@ for(const level of ['log','info','warn','error']){
 }
 
 const fs = require('fs');
+const { Pool } = require('pg');
+const pool = process.env.DATABASE_URL ? new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_SSL==='disable'?false:{rejectUnauthorized:false},max:5,idleTimeoutMillis:30000,connectionTimeoutMillis:10000}) : null;
+let databaseReady=false;
 // Session signing must never depend on provider API keys: rotating Gemini/Groq keys must not invalidate accounts.
 const SECRET = process.env.TOKEN_SECRET || crypto.createHash('sha256').update('deftai-session-v1:' + PASS).digest('hex');
 if(!process.env.TOKEN_SECRET)console.warn('TOKEN_SECRET is not set. Set a long random TOKEN_SECRET in Render to protect sessions; this fallback remains stable across provider-key changes.');
@@ -52,10 +55,10 @@ const LEGACY_FILE='/tmp/deftai-data.json';
 try{if(!fs.existsSync(FILE)&&fs.existsSync(LEGACY_FILE))fs.copyFileSync(LEGACY_FILE,FILE)}catch(e){console.error('Legacy data migration failed:',e.message)}
 let mem = {}; try { mem = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
 let saveError='';
-const persist = () => {
+const persist = (state=mem) => {
   try {
     const temp=FILE+'.tmp';
-    fs.writeFileSync(temp,JSON.stringify(mem));
+    fs.writeFileSync(temp,JSON.stringify(state));
     fs.renameSync(temp,FILE);
     saveError='';
   } catch(e) {
@@ -64,7 +67,22 @@ const persist = () => {
   }
 };
 async function kvGet(k) { return mem[k] ?? null; }
-async function kvSet(k, v) { mem[k] = v; persist(); if(saveError)throw new Error('Storage write failed: '+saveError); }
+async function kvSet(k, v) {
+  if(pool){await pool.query('INSERT INTO deftai_kv (key,value) VALUES ($1,$2::jsonb) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value',[k,JSON.stringify(v)]);mem[k]=v;return;}
+  const next={...mem,[k]:v};persist(next);if(saveError)throw new Error('Storage write failed: '+saveError);mem=next;
+}
+async function kvDelete(k){
+  if(pool)await pool.query('DELETE FROM deftai_kv WHERE key=$1',[k]);
+  const next={...mem};delete next[k];if(!pool){persist(next);if(saveError)throw new Error('Storage delete failed: '+saveError)}mem=next;
+}
+function diskMounted(){try{return fs.statSync(DATA_DIR).dev!==fs.statSync('/').dev}catch{return false}}
+async function initStore(){
+ if(!pool)return;
+ await pool.query('CREATE TABLE IF NOT EXISTS deftai_kv (key TEXT PRIMARY KEY,value JSONB NOT NULL,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
+ for(const [key,value] of Object.entries(mem))await pool.query('INSERT INTO deftai_kv (key,value) VALUES ($1,$2::jsonb) ON CONFLICT (key) DO NOTHING',[key,JSON.stringify(value)]);
+ const result=await pool.query('SELECT key,value FROM deftai_kv');mem={};for(const row of result.rows)mem[row.key]=row.value;databaseReady=true;
+ console.info('[storage] PostgreSQL ready · '+result.rowCount+' keys loaded');
+}
 const scrypt = (pw, salt) => new Promise((ok, no) => crypto.scrypt(pw, salt, 32, (e, k) => e ? no(e) : ok(k.toString('hex'))));
 const sign = u => { const b = Buffer.from(u + '|' + (Date.now() + 30 * 864e5)).toString('base64url'); return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url'); };
 function who(req) {
@@ -290,6 +308,10 @@ app.put('/api/admin/settings', h(async (req, res) => {
 
 async function getCommerce(){const defaults={version:2,plans:[{id:'free',name:'Free',price:'₹0 / month',credits:300,description:'Starter access with 300 credits.',active:true},{id:'core',name:'Core',price:'₹99 / month',credits:1800,description:'Everyday use with 1,800 monthly credits.',active:true},{id:'core-plus',name:'Core+',price:'₹199 / month',credits:5000,description:'More room with 5,000 monthly credits.',active:true},{id:'pro',name:'Pro',price:'₹399 / month',credits:12000,description:'Heavy use with 12,000 monthly credits.',active:true},{id:'pro-plus',name:'Pro+',price:'₹799 / month',credits:30000,description:'Maximum access with 30,000 monthly credits.',active:true}],contact:{discord:'',phone:'',message:'Choose a plan to submit a request. Monthly renewals and credit top-ups are handled manually after owner approval.'}};const saved=await kvGet('commerce:settings')||{};return {...defaults,...saved,plans:saved.version>=2&&Array.isArray(saved.plans)?saved.plans:defaults.plans};}
 async function userCredits(username){let c=await kvGet('credits:'+username);if(!c){c={balance:300,plan:'Free',updatedAt:Date.now()};await kvSet('credits:'+username,c);}return c;}
+const creditQueues=new Map();
+async function withCreditLock(username,fn){const previous=creditQueues.get(username)||Promise.resolve();let release;const current=new Promise(resolve=>release=resolve);creditQueues.set(username,current);await previous;try{return await fn()}finally{release();if(creditQueues.get(username)===current)creditQueues.delete(username)}}
+async function spendCredits(username,amount,reason){return withCreditLock(username,async()=>{const c=await userCredits(username);if(c.balance<amount)throw new Error('INSUFFICIENT_CREDITS');c.balance-=amount;c.updatedAt=Date.now();await kvSet('credits:'+username,c);await recordCreditEvent(username,-amount,reason,c.balance);return c})}
+async function addCredits(username,amount,reason){return withCreditLock(username,async()=>{const c=await userCredits(username);c.balance=Math.max(0,Math.min(10000000,c.balance+amount));c.updatedAt=Date.now();await kvSet('credits:'+username,c);await recordCreditEvent(username,amount,reason,c.balance);return c})}
 async function recordCreditEvent(username,delta,reason,balance){
  const key='credit-ledger:'+username,items=(await kvGet(key))||[];
  items.unshift({id:crypto.randomUUID(),at:Date.now(),delta,reason:String(reason||'Credit update').slice(0,100),balance});
@@ -320,7 +342,7 @@ app.get('/api/admin/purchase-requests',h(async(req,res)=>{if(!adminOnly(req,res)
 app.post('/api/admin/purchase-requests/:id/approve',h(async(req,res)=>{
  if(!adminOnly(req,res))return;const requests=(await kvGet('purchase:requests'))||[],r=requests.find(x=>x.id===req.params.id);
  if(!r)return res.status(404).json({error:'Request not found.'});if(r.status!=='pending')return res.status(409).json({error:'Request already reviewed.'});
- const c=await userCredits(r.username);c.balance=Math.min(10000000,c.balance+r.credits);c.plan=r.planName;c.updatedAt=Date.now();await kvSet('credits:'+r.username,c);await recordCreditEvent(r.username,r.credits,'Plan approved · '+r.planName,c.balance);
+ const c=await addCredits(r.username,r.credits,'Plan approved · '+r.planName);c.plan=r.planName;c.updatedAt=Date.now();await kvSet('credits:'+r.username,c);
  r.status='approved';r.reviewedAt=Date.now();await kvSet('purchase:requests',requests);await appendAudit({type:'purchase_approved',username:r.username,detail:r.planName+' · '+r.credits+' credits'});res.json({ok:true,credits:c});
 }));
 app.post('/api/admin/purchase-requests/:id/reject',h(async(req,res)=>{
@@ -353,14 +375,15 @@ app.post('/api/image',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
  if(!GEMINI_API_KEY)return res.status(503).json({error:'Image generation is not configured. Add GEMINI_API_KEY in Render.'});
  const prompt=String(req.body.prompt||'').trim().slice(0,2000);if(prompt.length<3)return res.status(400).json({error:'Describe the image first.'});
- const c=await userCredits(u),cost=20;if(c.balance<cost)return res.status(402).json({error:'Not enough credits. Open Plans to request more.'});
+ const cost=20,current=await userCredits(u);if(current.balance<cost)return res.status(402).json({error:'Not enough credits. Open Plans to request more.'});
  const model=process.env.GEMINI_IMAGE_MODEL||'gemini-nano-banana-2.1';
+ await spendCredits(u,cost,'Image generation · '+model);
  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':GEMINI_API_KEY},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}}),signal:AbortSignal.timeout(90000)});
- const body=await r.json().catch(()=>({}));if(!r.ok){const detail=String(body.error?.message||'No provider detail returned').slice(0,220);console.error('Gemini image error:',r.status,body.error?.status||'UNKNOWN',detail);return res.status(502).json({error:'Gemini image error '+r.status+': '+detail+' Credits were not deducted.'});}
+ const body=await r.json().catch(()=>({}));if(!r.ok){const detail=String(body.error?.message||'No provider detail returned').slice(0,220);await addCredits(u,cost,'Image generation refund · provider error');console.error('Gemini image error:',r.status,body.error?.status||'UNKNOWN',detail);return res.status(502).json({error:'Gemini image error '+r.status+': '+detail+' Credits were refunded.'});}
  const part=(body.candidates?.[0]?.content?.parts||[]).find(p=>p.inlineData?.data);
- if(!part)return res.status(502).json({error:'Gemini returned no image. Credits were not deducted.'});
+ if(!part){await addCredits(u,cost,'Image generation refund · empty response');return res.status(502).json({error:'Gemini returned no image. Credits were refunded.'});}
  const data=part.inlineData.data,mime=part.inlineData.mimeType||'image/png';
- c.balance-=cost;c.updatedAt=Date.now();await kvSet('credits:'+u,c);await recordCreditEvent(u,-cost,'Image generation · '+model,c.balance);res.json({ok:true,image:'data:'+mime+';base64,'+data,credits:c,cost});
+ const c=await userCredits(u);res.json({ok:true,image:'data:'+mime+';base64,'+data,credits:c,cost});
 }));
 
 app.get('/api/admin/knowledge', h(async (req,res) => { if (!adminOnly(req,res)) return; res.json({ documents: (await kvGet('kb:documents')) || [] }); }));
@@ -408,8 +431,8 @@ app.get('/api/status', async (req, res) => {
     groqOk = r.ok;
   } catch {}
   let geminiOk=false,geminiError='';
-  if(GEMINI_API_KEY){try{const g=await fetch('https://generativelanguage.googleapis.com/v1beta/models',{headers:{'x-goog-api-key':GEMINI_API_KEY},signal:AbortSignal.timeout(5000)});geminiOk=g.ok;if(!g.ok){const j=await g.json().catch(()=>({}));geminiError=String(j.error?.message||'Gemini API key check failed').slice(0,160)}}catch(e){geminiError='Gemini API check timed out or could not connect'}}
-  st = { t: Date.now(), v: { server: true, groq: groqOk, gemini:geminiOk, geminiConfigured:!!GEMINI_API_KEY, geminiError, openai:!!OPENAI_API_KEY, model: GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL, vision: VISION, web: false } };
+  if(GEMINI_API_KEY){try{const g=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(GEMINI_MODEL),{headers:{'x-goog-api-key':GEMINI_API_KEY},signal:AbortSignal.timeout(7000)});geminiOk=g.ok;if(!g.ok){const j=await g.json().catch(()=>({}));geminiError=String(j.error?.message||'Gemini model check failed').slice(0,180)}}catch(e){geminiError='Gemini API check timed out or could not connect'}}
+  st = { t: Date.now(), v: { server: true, groq: groqOk, gemini:geminiOk, geminiConfigured:!!GEMINI_API_KEY, geminiError, openai:!!OPENAI_API_KEY, model: GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL, vision: VISION, web: false, storage:pool&&databaseReady?'postgres':diskMounted()?'persistent-disk':'ephemeral', durableStorage:!!(pool&&databaseReady)||diskMounted() } };
   res.json(st.v);
 });
 
@@ -430,19 +453,20 @@ const codeHash=code=>crypto.createHash('sha256').update(String(code)).digest('he
 app.post('/api/register',h(async(req,res)=>{
  const username=String(req.body.username||'').trim(),password=String(req.body.password||''),email=String(req.body.email||'').trim().toLowerCase();
  if(!NAME.test(username))return res.status(400).json({error:'Username 3-20 characters: letters, numbers, _ ya .'});
- if(!EMAIL.test(email)||email.length>254)return res.status(400).json({error:'Valid email address daalo.'});
+ if(email&&(!EMAIL.test(email)||email.length>254))return res.status(400).json({error:'Valid email address daalo, ya email field blank chhodo.'});
+  if(process.env.RENDER&&!pool&&!diskMounted())return res.status(503).json({error:'Account creation is paused because persistent storage is not configured. Add DATABASE_URL or attach a persistent disk first.'});
  if(password.length<8||password.length>128)return res.status(400).json({error:'Password 8-128 characters ka hona chahiye.'});
  if(req.body.legalAccepted!==true)return res.status(400).json({error:'Terms aur Privacy Policy accept karna zaroori hai.'});
  const ip=req.ip||'unknown',normalized=username.toLowerCase(),k='u:'+normalized;
  if(recent(registerAttempts,ip,600000).length>=8)return res.status(429).json({error:'Too many signup attempts. Thodi der baad try karo.'});
  if(registering.has(k))return res.status(409).json({error:'Signup is already processing for this username.'});
- if(await kvGet(k)||await kvGet('email:'+email))return res.status(409).json({error:'Username ya email already registered hai.'});
+ if(await kvGet(k)||(email&&await kvGet('email:'+email)))return res.status(409).json({error:'Username ya email already registered hai.'});
  registering.add(k);recordAttempt(registerAttempts,ip,600000);
  try{
   const salt=crypto.randomBytes(16).toString('hex'),hash=await scrypt(password,salt);
   const account={name:username,email,salt,hash,at:Date.now(),legalAcceptedAt:new Date().toISOString(),legalVersion:'2026-11-18'};
-  await kvSet(k,account);await kvSet('email:'+email,normalized);
-  await appendAudit({type:'signup',username,detail:'Account created'});
+  await kvSet(k,account);if(email)await kvSet('email:'+email,normalized);
+  appendAudit({type:'signup',username,detail:'Account created'}).catch(e=>console.warn('Signup audit skipped:',e.message));
   res.json({token:sign(normalized),username});
  }finally{registering.delete(k);}
 }));
@@ -454,7 +478,7 @@ app.post('/api/login',h(async(req,res)=>{
  if(!u||u.disabled)return bad();
  const a=Buffer.from(await scrypt(password,u.salt)),b=Buffer.from(u.hash);
  if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return bad();
- failedLogins.delete(key);await appendAudit({type:'login_success',username:u.name,detail:'Successful sign-in'});
+ failedLogins.delete(key);appendAudit({type:'login_success',username:u.name,detail:'Successful sign-in'}).catch(e=>console.warn('Login audit skipped:',e.message));
  res.json({token:sign(username),username:u.name});
 }));
 app.post('/api/forgot-password',h(async(req,res)=>{
@@ -601,7 +625,7 @@ app.post('/api/chat', async (req, res) => {
       const decoder=new TextDecoder();let pending='',assistantText='';
       for await(const chunk of or.body){res.write(chunk);pending+=decoder.decode(chunk,{stream:true});const frames=pending.split(/\r?\n/);pending=frames.pop()||'';for(const line of frames){if(!line.startsWith('data:'))continue;const data=line.slice(5).trim();if(!data||data==='[DONE]')continue;try{const part=JSON.parse(data)?.choices?.[0]?.delta?.content;if(typeof part==='string')assistantText=(assistantText+part).slice(-10000)}catch{}}}
       if(!assistantText.trim()){send({error:'PROVIDER_ERROR',message:'OpenAI returned no text. No credits were deducted.'});return res.end()}
-      creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);await recordCreditEvent(ownerForCredits,-1,'Successful chat response',creditState.balance);
+      await spendCredits(ownerForCredits,1,'Successful chat response');
       const prefs=await getUserPreferences(ownerForCredits);
       await appendAudit(prefs.auditConsent===true?{type:'chat',username:ownerForCredits,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:assistantText}:{type:'chat_activity',username:ownerForCredits,detail:'Chat request completed; transcript not stored (no consent)'});
       return res.end();
@@ -614,7 +638,7 @@ app.post('/api/chat', async (req, res) => {
       if(!gr.ok){const detail=String(gj.error?.message||'No provider detail returned').slice(0,220),code=gj.error?.status||gj.error?.code||'UNKNOWN';console.error('Gemini request failed:',gr.status,code,detail);send({error:'PROVIDER_ERROR',message:'Gemini error '+gr.status+' ('+code+'): '+detail});return res.end();}
       const answer=(gj.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
       if(!answer){send({error:'PROVIDER_ERROR',message:'Gemini returned an empty response.'});return res.end();}
-      creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);await recordCreditEvent(ownerForCredits,-1,'Successful chat response',creditState.balance);
+      await spendCredits(ownerForCredits,1,'Successful chat response');
       send({choices:[{delta:{content:answer}}]});
       const prefs=await getUserPreferences(ownerForCredits);
       await appendAudit(prefs.auditConsent===true?{type:'chat',username:ownerForCredits,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:answer}:{type:'chat_activity',username:ownerForCredits,detail:'Chat request completed; transcript not stored (no consent)'});
@@ -649,7 +673,7 @@ app.post('/api/chat', async (req, res) => {
         } catch {}
       }
     }
-    if(assistantText.trim()){creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);await recordCreditEvent(ownerForCredits,-1,'Successful chat response',creditState.balance)}
+    if(assistantText.trim())await spendCredits(ownerForCredits,1,'Successful chat response');
     const account=who(req);
     if(account) {
       const prefs=await getUserPreferences(account);
@@ -666,4 +690,4 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT || 3000, () => console.log('DeftAI running'));
+initStore().then(()=>{app.listen(process.env.PORT||3000,()=>console.log('DeftAI running · '+(pool?'PostgreSQL':diskMounted()?'persistent disk':'ephemeral storage')))}).catch(e=>{console.error('Database initialization failed:',e.message);process.exit(1)});
