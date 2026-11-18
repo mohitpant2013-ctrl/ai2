@@ -350,6 +350,7 @@ async function retrieveKnowledge(query) {
 }
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/upgrade', (req, res) => res.sendFile(path.join(__dirname, 'upgrade.html')));
 app.get('/health', (req, res) => res.send('ok'));
 
 let st = { t: 0, v: null };
