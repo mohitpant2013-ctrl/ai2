@@ -130,10 +130,9 @@ body,#main,#side,#auth,#main{background:#000!important}
   <input id="lu" placeholder="Username or email" autocomplete="username">
   <input id="lemail" type="email" placeholder="Email address" autocomplete="email" style="display:none">
   <div id="verifyBox" style="display:none"><p class="sub">Email par 6-digit code bheja hai.</p><input id="verifyCode" inputmode="numeric" maxlength="6" placeholder="6-digit verification code"><button type="button" onclick="verifyEmail()">Verify email</button></div>
-  <button type="button" id="forgotBtn" class="secondary" onclick="forgotPassword()" style="width:100%;margin-top:8px">Forgot password?</button>
   <input id="lp" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')authGo()">
-  <input id="linv" placeholder="Invite code (owner se lo)" style="display:none">
-  <label id="legalConsent" style="display:none;font-size:12px;line-height:1.5;color:#aaa;gap:8px;align-items:flex-start"><input id="legalAgree" type="checkbox" style="width:auto;margin-top:3px"> I agree to the <a href="/legal" target="_blank" rel="noopener" style="color:#ddd">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener" style="color:#ddd">Privacy & Data Policy</a>.</label>
+  <button type="button" id="forgotBtn" class="secondary" onclick="forgotPassword()" style="width:100%;margin-top:8px">Forgot password?</button>
+    <label id="legalConsent" style="display:none;font-size:12px;line-height:1.5;color:#aaa;gap:8px;align-items:flex-start"><input id="legalAgree" type="checkbox" style="width:auto;margin-top:3px"> I agree to the <a href="/legal" target="_blank" rel="noopener" style="color:#ddd">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener" style="color:#ddd">Privacy & Data Policy</a>.</label>
   <div id="aerr"></div>
   <button id="abtn" class="pri" onclick="authGo()">Sign in</button>
 </div></div>
@@ -178,7 +177,7 @@ body,#main,#side,#auth,#main{background:#000!important}
 </div>
 
 
-<div id="plansModal" style="display:none;position:fixed;inset:0;z-index:100;background:#000c;overflow:auto;padding:20px"><section style="max-width:760px;margin:5vh auto;background:var(--panel);border:1px solid var(--bd);border-radius:18px;padding:22px"><div style="display:flex;justify-content:space-between;align-items:center"><h2>DeftAI Plans</h2><button onclick="closePlans()">✕</button></div><p id="storeBalance"></p><div id="planCards"></div><p id="purchaseInfo" style="white-space:pre-wrap"></p><small>Purchases are reviewed manually by the owner. Credits are added only after approval.</small></section></div>
+<div id="plansModal" style="display:none;position:fixed;inset:0;z-index:100;background:#000c;overflow:auto;padding:20px"><section style="max-width:760px;margin:5vh auto;background:var(--panel);border:1px solid var(--bd);border-radius:18px;padding:22px"><div style="display:flex;justify-content:space-between;align-items:center"><h2>DeftAI Plans</h2><button onclick="closePlans()">✕</button></div><p id="storeBalance"></p><div id="planCards"></div><p id="purchaseInfo" style="white-space:pre-wrap"></p><small>1 credit per chat request · 20 credits per generated image. Purchases are reviewed manually; credits are added only after owner approval.</small></section></div>
 <div id="settingsModal">
 <section id="settingsCard" role="dialog" aria-modal="true" aria-label="Settings">
 <aside class="settingsNav">
