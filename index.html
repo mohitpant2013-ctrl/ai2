@@ -556,7 +556,7 @@ async function savePreferences(){
 let storeState={plans:[],contact:{},credits:{balance:0},models:[]};
 async function loadStore(){
  try{const r=await api('/api/store');if(!r.ok)return;storeState=await r.json();$('creditCount').textContent=storeState.credits.balance;$('storeBalance').textContent='Balance: '+storeState.credits.balance+' credits · Plan: '+storeState.credits.plan;
-  const sel=$('modelChoice'),old=sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m.startsWith('gemini-')?'Gemini · '+m.replace('gemini-',''):m.startsWith('gpt-')?'ChatGPT · '+m:'DeftAI · '+m;sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;else if((storeState.models||[]).includes('gemini-3.8-flash'))sel.value='gemini-3.8-flash';else if((storeState.models||[]).length)sel.value=storeState.models[0];
+  const sel=$('modelChoice'),old=localStorage.getItem('deft_model')||sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m.startsWith('gemini-')?'Gemini · '+m.replace('gemini-',''):m.startsWith('gpt-')?'ChatGPT · '+m:'DeftAI · '+m;sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;else if((storeState.models||[]).includes('gemini-3.8-flash'))sel.value='gemini-3.8-flash';else if((storeState.models||[]).length)sel.value=storeState.models[0];localStorage.setItem('deft_model',sel.value);
   renderPlans();
  }catch{}
 }
@@ -599,7 +599,7 @@ let installPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('installApp').style.display='inline-flex'});
 async function installApp(){if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('installApp').style.display='none'}
 window.onload=()=>{document.querySelectorAll('i[data-i]').forEach(e=>e.outerHTML=ic(e.dataset.i));
-  bindAppearanceControls();applyAccent();applyDisplay();applyAppearance();$('mode').value=localStorage.getItem('deft_mode')||'';status();setInterval(status,30000);
+  bindAppearanceControls();applyAccent();applyDisplay();applyAppearance();$('mode').value=localStorage.getItem('deft_mode')||'';$('modelChoice').addEventListener('change',()=>localStorage.setItem('deft_model',$('modelChoice').value));status();setInterval(status,30000);
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
   user=localStorage.getItem('deft_user')||'';if(token&&user)start()};
 </script>
