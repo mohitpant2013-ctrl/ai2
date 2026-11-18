@@ -389,10 +389,15 @@ app.post('/api/image',h(async(req,res)=>{
  const accountId=process.env.CLOUDFLARE_ACCOUNT_ID||'',apiToken=process.env.CLOUDFLARE_API_TOKEN||'';
  if(!accountId||!apiToken)return res.status(503).json({error:'Image generation is not configured. Add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in Render.'});
  const rawPrompt=String(req.body.prompt||'').trim().slice(0,2000);if(rawPrompt.length<3)return res.status(400).json({error:'Describe the image first.'});
- // Disambiguate ordinary Minecraft avatar/dialogue requests for image models that can misread short prompts.
- // This adds benign context; it does not override provider safety checks for explicit or disallowed requests.
- const isBenignMinecraftDialogue=/\bminecraft\b/i.test(rawPrompt)&&/\b(player|character|avatar)\b/i.test(rawPrompt)&&/\b(say|says|saying|yo|hello|hi)\b/i.test(rawPrompt)&&!/\b(nsfw|nude|nudity|explicit|porn|sexual|erotic|fetish)\b/i.test(rawPrompt);
- const prompt=isBenignMinecraftDialogue?'A harmless, family-friendly, non-sexual Minecraft scene with a blocky player character and ordinary friendly dialogue. '+rawPrompt:rawPrompt;
+ // Add clarifying context to clearly fictional, ordinary game-art prompts that image models may misread.
+ // This is not a moderation bypass: provider safety checks remain enabled and authoritative.
+ const hasSensitiveTerms=/\b(nsfw|nude|nudity|explicit|porn|sexual|erotic|fetish)\b/i.test(rawPrompt);
+ const gameTitle=/\b(minecraft|roblox|fortnite|terraria|among us|valorant|counter.?strike|cs2|league of legends|zelda|pokemon)\b/i.test(rawPrompt);
+ const gameSubject=/\b(player|character|avatar|skin|mob|creeper|blocky|game scene|screenshot|pvp|obby)\b/i.test(rawPrompt);
+ const benignGameArt=gameTitle&&gameSubject&&!hasSensitiveTerms;
+ const prompt=benignGameArt
+  ? 'Create a fictional video-game illustration. Keep characters stylized and fully clothed; keep any action non-graphic. Interpret short dialogue as ordinary friendly in-game speech. '+rawPrompt
+  : rawPrompt;
  const cost=20,current=await userCredits(u);if(current.balance<cost)return res.status(402).json({error:'Not enough credits. Open Plans to request more.'});
  const model='@cf/black-forest-labs/flux-1-schnell';
  await spendCredits(u,cost,'Image generation · Cloudflare FLUX.1 Schnell');
