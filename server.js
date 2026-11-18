@@ -614,7 +614,7 @@ app.post('/api/chat', async (req, res) => {
       if(!gr.ok){const detail=String(gj.error?.message||'No provider detail returned').slice(0,220),code=gj.error?.status||gj.error?.code||'UNKNOWN';console.error('Gemini request failed:',gr.status,code,detail);send({error:'PROVIDER_ERROR',message:'Gemini error '+gr.status+' ('+code+'): '+detail});return res.end();}
       const answer=(gj.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
       if(!answer){send({error:'PROVIDER_ERROR',message:'Gemini returned an empty response.'});return res.end();}
-      creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);
+      creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);await recordCreditEvent(ownerForCredits,-1,'Successful chat response',creditState.balance);
       send({choices:[{delta:{content:answer}}]});
       const prefs=await getUserPreferences(ownerForCredits);
       await appendAudit(prefs.auditConsent===true?{type:'chat',username:ownerForCredits,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:answer}:{type:'chat_activity',username:ownerForCredits,detail:'Chat request completed; transcript not stored (no consent)'});
@@ -633,7 +633,6 @@ app.post('/api/chat', async (req, res) => {
       }
       return res.end();
     }
-    creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);
     const decoder=new TextDecoder();
     let pending='', assistantText='';
     for await (const c of r.body) {
