@@ -12,12 +12,21 @@ const TAVILY = process.env.TAVILY_API_KEY || ''; // optional: full web search
 const FALLBACK = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'];
 const G = 'https://api.groq.com/openai/v1';
 const UA = { 'User-Agent': 'DeftAI/1.0 (personal chat app)' };
+const RESEND_API_KEY=process.env.RESEND_API_KEY||'',RESEND_FROM=process.env.RESEND_FROM||'DeftAI <onboarding@resend.dev>';
+const OPENAI_API_KEY=process.env.OPENAI_API_KEY||'';
+async function sendAuthEmail(to,subject,html){
+ if(!RESEND_API_KEY)throw new Error('Email service is not configured.');
+ const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:RESEND_FROM,to:[to],subject,html})});
+ if(!r.ok){const body=await r.text();console.error('Email provider error:',r.status,body.slice(0,250));throw new Error('Email could not be sent. Check sender/domain configuration.');}
+}
 const crypto = require('crypto');
 const fs = require('fs');
 const SECRET = process.env.TOKEN_SECRET || (KEY || '') + PASS + 'deftai';
 
 // Simple local JSON storage. No Redis or external database required.
-const FILE = '/tmp/deftai-data.json';
+const DATA_DIR=process.env.DATA_DIR||'/tmp';
+try{fs.mkdirSync(DATA_DIR,{recursive:true});}catch{}
+const FILE=path.join(DATA_DIR,'deftai-data.json');
 let mem = {}; try { mem = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
 let wt;
 const persist = () => {
@@ -180,7 +189,7 @@ const makeAdminToken = () => {
   const b = Buffer.from('admin|' + (Date.now() + 12 * 3600e3)).toString('base64url');
   return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url');
 };
-const DEFAULT_SETTINGS = { model: MODEL, visionModel: VISION, reasoningEffort: 'medium', maxCompletionTokens: 700, systemPrompt: '' };
+const DEFAULT_SETTINGS = { model:MODEL,visionModel:VISION,allowedModels:[MODEL,'openai/gpt-oss-20b','openai/gpt-oss-120b'],reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
 async function getSettings() { return { ...DEFAULT_SETTINGS, ...(await kvGet('settings:global') || {}) }; }
 async function appendAudit(event) {
   const now=Date.now(), cutoff=now-30*864e5;
@@ -214,9 +223,59 @@ app.put('/api/admin/settings', h(async (req, res) => {
   const effort = ['low','medium','high'].includes(body.reasoningEffort) ? body.reasoningEffort : 'medium';
   const max = Math.max(256, Math.min(700, Number(body.maxCompletionTokens) || 700));
   const systemPrompt = String(body.systemPrompt || '').slice(0, 6000);
-  await kvSet('settings:global', { model, visionModel: model, reasoningEffort: effort, maxCompletionTokens: max, systemPrompt });
+  const allowedModels=[...new Set((Array.isArray(body.allowedModels)?body.allowedModels:String(body.allowedModels||'').split(/[\\n,]+/)).map(x=>String(x).trim()).filter(x=>/^[a-zA-Z0-9._/-]{3,100}$/.test(x)))].slice(0,20);
+  const safeModels=allowedModels.length?allowedModels:[model],chosen=safeModels.includes(model)?model:safeModels[0];
+  await kvSet('settings:global', { model:chosen, visionModel:String(body.visionModel||chosen).slice(0,100), allowedModels:safeModels, reasoningEffort:effort, maxCompletionTokens:max, systemPrompt });
   res.json({ ok: true });
 }));
+
+async function getCommerce(){return {...{plans:[{id:'starter',name:'Starter',price:'₹49',credits:500,description:'A small credit pack',active:true},{id:'pro',name:'Pro',price:'₹149',credits:2000,description:'More credits for regular use',active:true}],contact:{discord:'',phone:'',message:'Contact the owner to complete your purchase.'}},...(await kvGet('commerce:settings')||{})};}
+async function userCredits(username){let c=await kvGet('credits:'+username);if(!c){c={balance:100,plan:'Free',updatedAt:Date.now()};await kvSet('credits:'+username,c);}return c;}
+app.get('/api/store',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const cfg=await getCommerce(),settings=await getSettings(),credits=await userCredits(u);res.json({plans:(cfg.plans||[]).filter(p=>p.active),contact:cfg.contact,credits,models:settings.allowedModels||[settings.model||MODEL]});}));
+app.post('/api/purchase-request',h(async(req,res)=>{
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const id=String(req.body.planId||''),cfg=await getCommerce(),plan=(cfg.plans||[]).find(p=>p.id===id&&p.active);
+ if(!plan)return res.status(404).json({error:'Plan not found or unavailable.'});
+ const requests=(await kvGet('purchase:requests'))||[],existing=requests.find(x=>x.username===u&&x.planId===id&&x.status==='pending');
+ if(existing)return res.json({ok:true,requestId:existing.id,contact:cfg.contact,alreadyPending:true});
+ const request={id:crypto.randomUUID(),username:u,planId:plan.id,planName:plan.name,price:plan.price,credits:plan.credits,status:'pending',createdAt:Date.now()};
+ requests.unshift(request);await kvSet('purchase:requests',requests.slice(0,300));await appendAudit({type:'purchase_request',username:u,detail:'Purchase request: '+plan.name});res.json({ok:true,requestId:request.id,contact:cfg.contact});
+}));
+app.get('/api/admin/commerce',h(async(req,res)=>{if(!adminOnly(req,res))return;res.json({commerce:await getCommerce()});}));
+app.put('/api/admin/commerce',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;const b=req.body||{};
+ const plans=(Array.isArray(b.plans)?b.plans:[]).slice(0,12).map((p,i)=>({id:String(p.id||('plan-'+i)).toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,32)||('plan-'+i),name:String(p.name||'Plan').trim().slice(0,40),price:String(p.price||'').trim().slice(0,24),credits:Math.max(1,Math.min(1000000,Math.floor(Number(p.credits)||1))),description:String(p.description||'').trim().slice(0,180),active:p.active!==false})).filter(p=>p.name&&p.price);
+ const contact={discord:String(b.contact?.discord||'').trim().slice(0,100),phone:String(b.contact?.phone||'').trim().slice(0,40),message:String(b.contact?.message||'').trim().slice(0,500)};
+ await kvSet('commerce:settings',{plans,contact});res.json({ok:true,commerce:{plans,contact}});
+}));
+app.get('/api/admin/purchase-requests',h(async(req,res)=>{if(!adminOnly(req,res))return;res.json({requests:(await kvGet('purchase:requests'))||[]});}));
+app.post('/api/admin/purchase-requests/:id/approve',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;const requests=(await kvGet('purchase:requests'))||[],r=requests.find(x=>x.id===req.params.id);
+ if(!r)return res.status(404).json({error:'Request not found.'});if(r.status!=='pending')return res.status(409).json({error:'Request already reviewed.'});
+ const c=await userCredits(r.username);c.balance=Math.min(10000000,c.balance+r.credits);c.plan=r.planName;c.updatedAt=Date.now();await kvSet('credits:'+r.username,c);
+ r.status='approved';r.reviewedAt=Date.now();await kvSet('purchase:requests',requests);await appendAudit({type:'purchase_approved',username:r.username,detail:r.planName+' · '+r.credits+' credits'});res.json({ok:true,credits:c});
+}));
+app.post('/api/admin/purchase-requests/:id/reject',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;const requests=(await kvGet('purchase:requests'))||[],r=requests.find(x=>x.id===req.params.id);
+ if(!r)return res.status(404).json({error:'Request not found.'});if(r.status!=='pending')return res.status(409).json({error:'Request already reviewed.'});
+ r.status='rejected';r.reviewedAt=Date.now();await kvSet('purchase:requests',requests);res.json({ok:true});
+}));
+app.post('/api/admin/credits',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;const username=String(req.body.username||'').toLowerCase(),amount=Math.floor(Number(req.body.amount)||0);
+ if(!username||!Number.isFinite(amount)||amount===0||Math.abs(amount)>1000000)return res.status(400).json({error:'Valid username and non-zero credit amount required.'});
+ if(!await kvGet('u:'+username))return res.status(404).json({error:'User not found.'});
+ const c=await userCredits(username);c.balance=Math.max(0,Math.min(10000000,c.balance+amount));c.updatedAt=Date.now();await kvSet('credits:'+username,c);res.json({ok:true,credits:c});
+}));
+app.post('/api/image',h(async(req,res)=>{
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
+ if(!OPENAI_API_KEY)return res.status(503).json({error:'Image generation is not configured. Owner must add OPENAI_API_KEY.'});
+ const prompt=String(req.body.prompt||'').trim().slice(0,2000);if(prompt.length<3)return res.status(400).json({error:'Describe the image first.'});
+ const c=await userCredits(u),cost=20;if(c.balance<cost)return res.status(402).json({error:'Not enough credits. Open Plans to request more.'});
+ const r=await fetch('https://api.openai.com/v1/images/generations',{method:'POST',headers:{Authorization:'Bearer '+OPENAI_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-image-1',prompt,size:'1024x1024',quality:'low',n:1})});
+ const body=await r.json().catch(()=>({}));if(!r.ok){console.error('Image provider error:',r.status,JSON.stringify(body).slice(0,250));return res.status(502).json({error:'Image provider failed. Credits were not deducted.'});}
+ const data=body.data?.[0]?.b64_json;if(!data)return res.status(502).json({error:'Image provider returned no image. Credits were not deducted.'});
+ c.balance-=cost;c.updatedAt=Date.now();await kvSet('credits:'+u,c);res.json({ok:true,image:'data:image/png;base64,'+data,credits:c,cost});
+}));
+
 app.get('/api/admin/knowledge', h(async (req,res) => { if (!adminOnly(req,res)) return; res.json({ documents: (await kvGet('kb:documents')) || [] }); }));
 app.post('/api/admin/knowledge', h(async (req,res) => {
   if (!adminOnly(req,res)) return;
@@ -269,48 +328,85 @@ const limited = ip => {
 };
 
 
-const NAME = /^[a-zA-Z0-9_.]{3,20}$/;
-const failedLogins = new Map(), registerAttempts = new Map(), registering = new Set();
-const recent = (map,key,ms) => (map.get(key)||[]).filter(t=>Date.now()-t<ms);
-const recordAttempt = (map,key,ms) => { const a=recent(map,key,ms); a.push(Date.now()); map.set(key,a); return a.length; };
-app.post('/api/register', h(async (req,res) => {
- const username=String(req.body.username||'').trim(), password=String(req.body.password||'');
- if(!NAME.test(username)) return res.status(400).json({error:'Username 3-20 characters: letters, numbers, _ ya .'});
- if(password.length<6||password.length>128) return res.status(400).json({error:'Password 6-128 characters ka hona chahiye.'});
- if(PASS&&req.body.invite!==PASS) return res.status(403).json({error:'Invite code galat hai'});
- if(req.body.legalAccepted!==true) return res.status(400).json({error:'Terms aur Privacy Policy accept karna zaroori hai.'});
- const ip=req.ip||'unknown', normalized=username.toLowerCase(), k='u:'+normalized;
- if(recent(registerAttempts,ip,10*60e3).length>=12) return res.status(429).json({error:'Too many account-creation attempts from this network. Please wait a few minutes.'});
- if(registering.has(k)) return res.status(409).json({error:'Account creation is already in progress for this username.'});
- if(await kvGet(k)) return res.status(409).json({error:'Ye username le liya gaya hai'});
- registering.add(k); recordAttempt(registerAttempts,ip,10*60e3);
- try {
-  const salt=crypto.randomBytes(16).toString('hex'), hash=await scrypt(password,salt);
-  if(await kvGet(k)) return res.status(409).json({error:'Ye username le liya gaya hai'});
-  await kvSet(k,{name:username,salt,hash,at:Date.now(),legalAcceptedAt:new Date().toISOString(),legalVersion:'2026-11-17'});
-  await appendAudit({type:'signup',username,detail:'Account created'});
-  res.json({token:sign(normalized),username});
- } finally { registering.delete(k); }
+const NAME=/^[a-zA-Z0-9_.]{3,20}$/;
+const EMAIL=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const failedLogins=new Map(),registerAttempts=new Map(),registering=new Set(),authAttempts=new Map();
+const recent=(map,key,ms)=>(map.get(key)||[]).filter(t=>Date.now()-t<ms);
+const recordAttempt=(map,key,ms)=>{const a=recent(map,key,ms);a.push(Date.now());map.set(key,a);return a.length;};
+const codeHash=code=>crypto.createHash('sha256').update(String(code)).digest('hex');
+app.post('/api/register',h(async(req,res)=>{
+ const username=String(req.body.username||'').trim(),password=String(req.body.password||''),email=String(req.body.email||'').trim().toLowerCase();
+ if(!NAME.test(username))return res.status(400).json({error:'Username 3-20 characters: letters, numbers, _ ya .'});
+ if(!EMAIL.test(email)||email.length>254)return res.status(400).json({error:'Valid email address daalo.'});
+ if(password.length<8||password.length>128)return res.status(400).json({error:'Password 8-128 characters ka hona chahiye.'});
+ if(req.body.legalAccepted!==true)return res.status(400).json({error:'Terms aur Privacy Policy accept karna zaroori hai.'});
+ if(!RESEND_API_KEY)return res.status(503).json({error:'Email verification is not configured. Owner ko RESEND_API_KEY check karna hoga.'});
+ const ip=req.ip||'unknown',normalized=username.toLowerCase(),k='u:'+normalized;
+ if(recent(registerAttempts,ip,600000).length>=8)return res.status(429).json({error:'Too many signup attempts. Thodi der baad try karo.'});
+ if(registering.has(k))return res.status(409).json({error:'Signup is already processing for this username.'});
+ if(await kvGet(k)||await kvGet('email:'+email))return res.status(409).json({error:'Username ya email already registered hai.'});
+ registering.add(k);recordAttempt(registerAttempts,ip,600000);
+ try{
+  const salt=crypto.randomBytes(16).toString('hex'),hash=await scrypt(password,salt),code=String(crypto.randomInt(100000,1000000));
+  await kvSet('pending-signup:'+normalized,{name:username,email,salt,hash,codeHash:codeHash(code),expiresAt:Date.now()+900000,legalAcceptedAt:new Date().toISOString(),legalVersion:'2026-11-18'});
+  try{await sendAuthEmail(email,'Verify your DeftAI email','<div style="font-family:Arial,sans-serif"><h2>Verify your DeftAI email</h2><p>Your code:</p><p style="font-size:30px;font-weight:bold;letter-spacing:8px">'+code+'</p><p>Expires in 15 minutes.</p></div>');}
+  catch(e){await kvSet('pending-signup:'+normalized,null);return res.status(502).json({error:e.message});}
+  res.json({verificationRequired:true,username});
+ }finally{registering.delete(k);}
 }));
-app.post('/api/login', h(async (req,res) => {
- const username=String(req.body.username||'').trim(), password=String(req.body.password||''), key=(req.ip||'unknown')+':'+username.toLowerCase();
- if(recent(failedLogins,key,10*60e3).length>=10) return res.status(429).json({error:'Too many incorrect passwords for this username. Wait 10 minutes, then try again.'});
- const u=await kvGet('u:'+username.toLowerCase());
- const bad=()=>{recordAttempt(failedLogins,key,10*60e3);appendAudit({type:'login_failed',username:username.slice(0,40),detail:'Invalid credentials'}).catch(()=>{});return res.status(401).json({error:'Username ya password galat hai'});};
- if(!u) return bad();
- const a=Buffer.from(await scrypt(password,u.salt)), b=Buffer.from(u.hash);
- if(a.length!==b.length||!crypto.timingSafeEqual(a,b)) return bad();
- failedLogins.delete(key);
- await appendAudit({type:'login_success',username:u.name,detail:'Successful sign-in'});
- res.json({token:sign(username.toLowerCase()),username:u.name});
+app.post('/api/verify-email',h(async(req,res)=>{
+ const username=String(req.body.username||'').trim(),code=String(req.body.code||'').trim(),normalized=username.toLowerCase();
+ if(!NAME.test(username)||!(/^\d{6}$/.test(code)))return res.status(400).json({error:'Username aur 6-digit code check karo.'});
+ if(recordAttempt(authAttempts,'verify:'+(req.ip||'unknown'),600000)>20)return res.status(429).json({error:'Too many verification attempts.'});
+ const p=await kvGet('pending-signup:'+normalized);
+ if(!p||p.expiresAt<Date.now())return res.status(400).json({error:'Code expire ho gaya. Signup dobara karo.'});
+ if(!crypto.timingSafeEqual(Buffer.from(codeHash(code)),Buffer.from(p.codeHash)))return res.status(400).json({error:'Verification code incorrect hai.'});
+ if(await kvGet('u:'+normalized)||await kvGet('email:'+p.email))return res.status(409).json({error:'Username ya email already registered hai.'});
+ await kvSet('u:'+normalized,{name:p.name,email:p.email,emailVerifiedAt:new Date().toISOString(),salt:p.salt,hash:p.hash,at:Date.now(),legalAcceptedAt:p.legalAcceptedAt,legalVersion:p.legalVersion});
+ await kvSet('email:'+p.email,normalized);await kvSet('pending-signup:'+normalized,null);
+ await appendAudit({type:'signup',username:p.name,detail:'Email verified; account created'});
+ res.json({token:sign(normalized),username:p.name});
+}));
+app.post('/api/login',h(async(req,res)=>{
+ const identifier=String(req.body.username||req.body.identifier||'').trim(),password=String(req.body.password||''),normalized=identifier.toLowerCase(),key=(req.ip||'unknown')+':'+normalized;
+ if(recent(failedLogins,key,600000).length>=10)return res.status(429).json({error:'Too many incorrect passwords. Wait 10 minutes.'});
+ const username=normalized.includes('@')?await kvGet('email:'+normalized):normalized,u=username?await kvGet('u:'+username):null;
+ const bad=()=>{recordAttempt(failedLogins,key,600000);appendAudit({type:'login_failed',username:identifier.slice(0,40),detail:'Invalid credentials'}).catch(()=>{});return res.status(401).json({error:'Username/email ya password galat hai'});};
+ if(!u)return bad();
+ const a=Buffer.from(await scrypt(password,u.salt)),b=Buffer.from(u.hash);
+ if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return bad();
+ failedLogins.delete(key);await appendAudit({type:'login_success',username:u.name,detail:'Successful sign-in'});
+ res.json({token:sign(username),username:u.name});
+}));
+app.post('/api/forgot-password',h(async(req,res)=>{
+ const email=String(req.body.email||'').trim().toLowerCase();
+ if(!EMAIL.test(email))return res.status(400).json({error:'Valid email address daalo.'});
+ if(recordAttempt(authAttempts,'reset:'+(req.ip||'unknown'),600000)>8)return res.status(429).json({error:'Too many reset requests. Wait a little.'});
+ const username=await kvGet('email:'+email),u=username?await kvGet('u:'+username):null;
+ if(u&&u.email===email){
+  const code=String(crypto.randomInt(100000,1000000));
+  await kvSet('password-reset:'+email,{username,codeHash:codeHash(code),expiresAt:Date.now()+900000});
+  try{await sendAuthEmail(email,'Reset your DeftAI password','<div style="font-family:Arial,sans-serif"><h2>Password reset</h2><p>Your one-time code:</p><p style="font-size:30px;font-weight:bold;letter-spacing:8px">'+code+'</p><p>Expires in 15 minutes.</p></div>');}
+  catch(e){console.error('Password reset email failed:',e.message);}
+ }
+ res.json({ok:true,message:'If this email is registered, a reset code has been sent.'});
+}));
+app.post('/api/reset-password',h(async(req,res)=>{
+ const email=String(req.body.email||'').trim().toLowerCase(),code=String(req.body.code||'').trim(),password=String(req.body.password||'');
+ if(!EMAIL.test(email)||!(/^\d{6}$/.test(code))||password.length<8||password.length>128)return res.status(400).json({error:'Email, 6-digit code, or new password is invalid.'});
+ const reset=await kvGet('password-reset:'+email);
+ if(!reset||reset.expiresAt<Date.now())return res.status(400).json({error:'Reset code expired or invalid. Request a new one.'});
+ if(!crypto.timingSafeEqual(Buffer.from(codeHash(code)),Buffer.from(reset.codeHash)))return res.status(400).json({error:'Reset code incorrect hai.'});
+ const u=await kvGet('u:'+reset.username);if(!u||u.email!==email)return res.status(400).json({error:'Account not found.'});
+ const salt=crypto.randomBytes(16).toString('hex'),hash=await scrypt(password,salt);
+ await kvSet('u:'+reset.username,{...u,salt,hash,passwordChangedAt:new Date().toISOString()});await kvSet('password-reset:'+email,null);res.json({ok:true});
 }));
 
-
-async function getUserPreferences(username){return {nickname:'',tone:'natural',about:'',instructions:'',language:'auto',voiceLang:'en-IN',mode:'',auditConsent:false,...(await kvGet('prefs:'+username)||{})};}
+async function getUserPreferences(username){return {nickname:'',tone:'natural',about:'',instructions:'',language:'auto',voiceLang:'en-IN',mode:'',auditConsent:false,appearance:null,accent:'violet',...(await kvGet('prefs:'+username)||{})};}
 app.get('/api/preferences',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});res.json(await getUserPreferences(u));}));
 app.put('/api/preferences',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const b=req.body||{};
- const prefs={nickname:String(b.nickname||'').trim().slice(0,40),tone:['natural','concise','detailed','stepwise'].includes(b.tone)?b.tone:'natural',about:String(b.about||'').trim().slice(0,600),instructions:String(b.instructions||'').trim().slice(0,1200),language:['auto','en','hi','pa','hinglish'].includes(b.language)?b.language:'auto',voiceLang:['en-IN','hi-IN','pa-IN'].includes(b.voiceLang)?b.voiceLang:'en-IN',mode:['','teacher','coder','friend','short'].includes(b.mode)?b.mode:'',auditConsent:b.auditConsent===true};
+ const prefs={nickname:String(b.nickname||'').trim().slice(0,40),tone:['natural','concise','detailed','stepwise'].includes(b.tone)?b.tone:'natural',about:String(b.about||'').trim().slice(0,600),instructions:String(b.instructions||'').trim().slice(0,1200),language:['auto','en','hi','pa','hinglish'].includes(b.language)?b.language:'auto',voiceLang:['en-IN','hi-IN','pa-IN'].includes(b.voiceLang)?b.voiceLang:'en-IN',mode:['','teacher','coder','friend','short'].includes(b.mode)?b.mode:'',auditConsent:b.auditConsent===true,appearance:b.appearance&&typeof b.appearance==='object'?{bgMode:['solid','gradient','image'].includes(b.appearance.bgMode)?b.appearance.bgMode:'solid',bgColor:/^#[0-9a-f]{6}$/i.test(b.appearance.bgColor)?b.appearance.bgColor:'#08090d',gradA:/^#[0-9a-f]{6}$/i.test(b.appearance.gradA)?b.appearance.gradA:'#101426',gradB:/^#[0-9a-f]{6}$/i.test(b.appearance.gradB)?b.appearance.gradB:'#09090b',textColor:/^#[0-9a-f]{6}$/i.test(b.appearance.textColor)?b.appearance.textColor:'#f4f4f5',dim:Math.max(0,Math.min(80,Number(b.appearance.dim)||0)),panelOpacity:Math.max(35,Math.min(100,Number(b.appearance.panelOpacity)||86)),blur:Math.max(0,Math.min(30,Number(b.appearance.blur)||0)),fontSize:Math.max(12,Math.min(22,Number(b.appearance.fontSize)||15)),chatWidth:Math.max(480,Math.min(1200,Number(b.appearance.chatWidth)||760)),bubble:['soft','round','square','minimal'].includes(b.appearance.bubble)?b.appearance.bubble:'soft',density:['comfortable','compact','spacious'].includes(b.appearance.density)?b.appearance.density:'comfortable',reduceMotion:b.appearance.reduceMotion===true}:null,accent:['violet','cyan','blue','green','orange','rose','gold','rainbow','mono'].includes(b.accent)?b.accent:'violet'};
  await kvSet('prefs:'+u,prefs);res.json({ok:true});
 }));
 
@@ -369,6 +465,8 @@ app.post('/api/chat', async (req, res) => {
     return { role, content: raw.slice(-cap) };
   });
 
+  const ownerForCredits=who(req),creditState=await userCredits(ownerForCredits);
+  if(creditState.balance<1)return res.status(402).json({error:'You are out of credits. Open Plans to request more.'});
   const ctrl = new AbortController();
   res.on('close', () => ctrl.abort());
   res.setHeader('Content-Type', 'text/event-stream');
@@ -408,7 +506,8 @@ app.post('/api/chat', async (req, res) => {
       srcText = unique.map((x,i) => `[${i+1}] ${x.title}${x.url ? ' ('+x.url+')' : ''}\\n${String(x.text).slice(0,1200)}`).join('\\n\\n');
     }
     if (!unique.length && !hasImg) send({ status: 'No matching web pages or knowledge documents found; answering from model knowledge.' });
-    const activeModel = settings.model || MODEL;
+    const requestedModel=String(req.body.model||settings.model||MODEL);
+    const activeModel=(settings.allowedModels||[settings.model||MODEL]).includes(requestedModel)?requestedModel:(settings.model||MODEL);
     const maxTokens = Math.max(256, Math.min(700, Number(settings.maxCompletionTokens) || 700));
     const activeVision = settings.visionModel || activeModel;
     const creativeRequest = /\b(creative|creativity|brainstorm|ideas?|concepts?|design|story|storytelling|poem|joke|funny|original|unique|imagine|invent|script|thumbnail|video idea|content idea)\b/i.test(lastText);
@@ -425,6 +524,7 @@ app.post('/api/chat', async (req, res) => {
       }
       return res.end();
     }
+    creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);
     const decoder=new TextDecoder();
     let pending='', assistantText='';
     for await (const c of r.body) {

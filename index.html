@@ -127,7 +127,10 @@ body,#main,#side,#auth,#main{background:#000!important}
   <h3>Welcome</h3>
   <p class="sub">Account banao ya sign in karo. Tumhari chats tumhare account mein save rehti hain.</p>
   <div class="tabs"><button id="tIn" class="on" onclick="tab('in')">Sign in</button><button id="tUp" onclick="tab('up')">Create account</button></div>
-  <input id="lu" placeholder="Username" autocomplete="username">
+  <input id="lu" placeholder="Username or email" autocomplete="username">
+  <input id="lemail" type="email" placeholder="Email address" autocomplete="email" style="display:none">
+  <div id="verifyBox" style="display:none"><p class="sub">Email par 6-digit code bheja hai.</p><input id="verifyCode" inputmode="numeric" maxlength="6" placeholder="6-digit verification code"><button type="button" onclick="verifyEmail()">Verify email</button></div>
+  <button type="button" id="forgotBtn" class="secondary" onclick="forgotPassword()" style="width:100%;margin-top:8px">Forgot password?</button>
   <input id="lp" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')authGo()">
   <input id="linv" placeholder="Invite code (owner se lo)" style="display:none">
   <label id="legalConsent" style="display:none;font-size:12px;line-height:1.5;color:#aaa;gap:8px;align-items:flex-start"><input id="legalAgree" type="checkbox" style="width:auto;margin-top:3px"> I agree to the <a href="/legal" target="_blank" rel="noopener" style="color:#ddd">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener" style="color:#ddd">Privacy & Data Policy</a>.</label>
@@ -157,13 +160,14 @@ body,#main,#side,#auth,#main{background:#000!important}
   <div id="top"><button id="menu" class="ib" onclick="$('side').classList.toggle('open')"><i data-i="menu"></i></button>
     <span class="pill"><span class="dot wait" id="dot"></span><span id="stxt">Checking...</span></span>
     <button onclick="openSettings()" title="Settings">⚙</button>
-    <select id="mode" onchange="localStorage.setItem('deft_mode',this.value)"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select></div>
+    <button type="button" onclick="openPlans()" style="padding:7px 10px">Plans · <span id="creditCount">…</span> credits</button><select id="modelChoice" aria-label="AI model" title="AI model"><option value="">Loading models…</option></select><select id="mode" onchange="localStorage.setItem('deft_mode',this.value)"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select></div>
   <div id="chat"><div class="wrap" id="msgs"></div></div>
   <div id="box"><div id="bar">
     <div id="pend"></div>
     <div id="row">
       <button class="ib" onclick="$('file').click()" title="Image / file"><i data-i="clip"></i></button>
       
+      <button class="ib" onclick="generateImage()" title="Generate image (20 credits)">🎨</button>
       <button id="mic" class="ib" onclick="mic()" title="Bol ke poochho"><i data-i="mic"></i></button>
       <input type="file" id="file" multiple hidden accept="image/*,.txt,.md,.csv,.json,.js,.py,.html,.css,.java,.c,.cpp,.xml,.log,.pdf">
       <textarea id="inp" rows="1" placeholder="DeftAI se kuch bhi poochho..."></textarea>
@@ -174,6 +178,7 @@ body,#main,#side,#auth,#main{background:#000!important}
 </div>
 
 
+<div id="plansModal" style="display:none;position:fixed;inset:0;z-index:100;background:#000c;overflow:auto;padding:20px"><section style="max-width:760px;margin:5vh auto;background:var(--panel);border:1px solid var(--bd);border-radius:18px;padding:22px"><div style="display:flex;justify-content:space-between;align-items:center"><h2>DeftAI Plans</h2><button onclick="closePlans()">✕</button></div><p id="storeBalance"></p><div id="planCards"></div><p id="purchaseInfo" style="white-space:pre-wrap"></p><small>Purchases are reviewed manually by the owner. Credits are added only after approval.</small></section></div>
 <div id="settingsModal">
 <section id="settingsCard" role="dialog" aria-modal="true" aria-label="Settings">
 <aside class="settingsNav">
@@ -241,14 +246,14 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 const TYP='<span class="typing"><i></i><i></i><i></i></span>';
 const SUG=['Mughal empire ka itihaas short mein batao','Chandrayaan-3 ke baare mein batao','Black holes kaise bante hain?','Python mein fibonacci likho'];
 const APPEARANCE_DEFAULTS={bgMode:'solid',bgColor:'#08090d',gradA:'#101426',gradB:'#09090b',textColor:'#f4f4f5',dim:28,panelOpacity:86,blur:14,fontSize:15,chatWidth:760,bubble:'soft',reduceMotion:false};
-function getAppearance(){try{return {...APPEARANCE_DEFAULTS,...JSON.parse(localStorage.getItem('deft_appearance')||'{}')}}catch{return {...APPEARANCE_DEFAULTS}}}
+function getAppearance(){try{return {...APPEARANCE_DEFAULTS,...(userPrefs.appearance||{}),...JSON.parse(localStorage.getItem('deft_appearance')||'{}')}}catch{return {...APPEARANCE_DEFAULTS,...(userPrefs.appearance||{})}}}
 function readAppearanceControls(){return {bgMode:$('prefBgMode').value,bgColor:$('prefBgColor').value,gradA:$('prefGradA').value,gradB:$('prefGradB').value,textColor:$('prefTextColor').value,dim:+$('prefDim').value,panelOpacity:+$('prefPanelOpacity').value,blur:+$('prefBlur').value,fontSize:+$('prefFontSize').value,chatWidth:+$('prefChatWidth').value,bubble:$('prefBubble').value,density:$('prefDensity')?.value||'comfortable',reduceMotion:$('prefReduceMotion').checked}}
 function setAppearanceControls(a){$('prefBgMode').value=a.bgMode;$('prefBgColor').value=a.bgColor;$('prefGradA').value=a.gradA;$('prefGradB').value=a.gradB;$('prefTextColor').value=a.textColor;$('prefDim').value=a.dim;$('prefPanelOpacity').value=a.panelOpacity;$('prefBlur').value=a.blur;$('prefFontSize').value=a.fontSize;$('prefChatWidth').value=a.chatWidth;$('prefBubble').value=a.bubble;if($('prefDensity'))$('prefDensity').value=a.density||'comfortable';$('prefReduceMotion').checked=!!a.reduceMotion;updateAppearanceLabels()}
 function loadAppearanceControls(){setAppearanceControls(getAppearance())}
 function updateAppearanceLabels(){$('fontSizeLabel').textContent=$('prefFontSize').value+' px';$('chatWidthLabel').textContent=$('prefChatWidth').value+' px'}
 function applyAppearance(){const a=getAppearance(),root=document.documentElement.style,alpha=Math.max(.35,Math.min(1,a.panelOpacity/100)),dim=Math.max(0,Math.min(80,a.dim))/100;root.setProperty('--bg',a.bgColor);root.setProperty('--tx',a.textColor);root.setProperty('--panel','rgba(8,9,14,'+alpha+')');root.setProperty('--el','rgba(20,21,29,'+Math.min(1,alpha+.08)+')');root.setProperty('--hv','rgba(35,36,47,'+Math.min(1,alpha+.12)+')');root.setProperty('--panel-blur',a.blur+'px');root.setProperty('--chat-width',a.chatWidth+'px');const wall=localStorage.getItem('deft_wallpaper');let bg='none';if(a.bgMode==='gradient')bg='linear-gradient(135deg,'+a.gradA+','+a.gradB+')';else if(a.bgMode==='image'&&wall)bg='linear-gradient(rgba(0,0,0,'+dim+'),rgba(0,0,0,'+dim+')),url("'+wall+'")';document.body.style.backgroundImage=bg;document.body.style.backgroundColor=a.bgColor;document.body.style.backgroundSize='cover';document.body.style.backgroundPosition='center';document.body.style.backgroundAttachment='fixed';document.body.style.color=a.textColor;document.body.style.fontSize=a.fontSize+'px';document.body.classList.toggle('bubble-round',a.bubble==='round');document.body.classList.toggle('bubble-square',a.bubble==='square');document.body.classList.toggle('bubble-minimal',a.bubble==='minimal');document.body.classList.toggle('reduce-motion',!!a.reduceMotion);document.body.classList.toggle('density-compact',a.density==='compact');document.body.classList.toggle('density-spacious',a.density==='spacious');const p=$('appearancePreview');if(p){p.style.background=bg==='none'?a.bgColor:bg;p.style.color=a.textColor;p.style.backdropFilter='blur('+a.blur+'px)'}}
 function previewAppearance(){const a=readAppearanceControls();try{localStorage.setItem('deft_appearance',JSON.stringify(a))}catch(e){if($('appearanceState'))$('appearanceState').textContent='Browser storage full: preview only'}updateAppearanceLabels();applyAppearance();if($('appearanceState'))$('appearanceState').textContent='Preview active · saved locally'}
-function saveAppearance(){try{localStorage.setItem('deft_appearance',JSON.stringify(readAppearanceControls()));localStorage.setItem('deft_accent',$('prefAccent').value);applyAccent();applyAppearance();if($('appearanceState'))$('appearanceState').textContent='Appearance saved'}catch(e){alert('Browser storage full; cannot save appearance')}}
+function saveAppearance(){try{const a=readAppearanceControls();localStorage.setItem('deft_appearance',JSON.stringify(a));localStorage.setItem('deft_accent',$('prefAccent').value);userPrefs.appearance=a;userPrefs.accent=$('prefAccent').value;applyAccent();applyAppearance();if($('appearanceState'))$('appearanceState').textContent='Saving appearance to account…';if(token)savePreferences()}catch(e){alert('Could not save appearance: '+e.message)}}
 function bindAppearanceControls(){['prefBgMode','prefBgColor','prefGradA','prefGradB','prefTextColor','prefDim','prefPanelOpacity','prefBlur','prefFontSize','prefChatWidth','prefBubble','prefDensity','prefReduceMotion','prefAccent'].forEach(id=>{const el=$(id);if(!el||el.dataset.appearanceBound)return;el.dataset.appearanceBound='1';const update=()=>{if(id==='prefAccent'){localStorage.setItem('deft_accent',el.value);applyAccent()}previewAppearance()};el.addEventListener('input',update);el.addEventListener('change',update)});const file=$('wallpaperFile');if(file&&!file.dataset.appearanceBound){file.dataset.appearanceBound='1';file.addEventListener('change',()=>loadWallpaper(file.files?.[0]))}}
 function applyThemePreset(name){const p={aurora:{bgMode:'gradient',gradA:'#101b35',gradB:'#25123a',bgColor:'#08090d',textColor:'#f4f4f5',dim:22,panelOpacity:76,blur:18},ocean:{bgMode:'gradient',gradA:'#06364a',gradB:'#08111e',bgColor:'#07121c',textColor:'#effaff',dim:25,panelOpacity:82,blur:16},forest:{bgMode:'gradient',gradA:'#0c2c1c',gradB:'#10180f',bgColor:'#07110b',textColor:'#effaf1',dim:28,panelOpacity:86,blur:12},sunset:{bgMode:'gradient',gradA:'#4a1d36',gradB:'#1c1838',bgColor:'#160c18',textColor:'#fff4f4',dim:30,panelOpacity:82,blur:16},minimal:{bgMode:'solid',bgColor:'#050505',gradA:'#101010',gradB:'#050505',textColor:'#f4f4f5',dim:0,panelOpacity:98,blur:0}}[name];if(!p)return;setAppearanceControls({...getAppearance(),...p});$('prefAccent').value=name==='ocean'?'cyan':name==='forest'?'green':name==='sunset'?'orange':name==='minimal'?'mono':'violet';localStorage.setItem('deft_accent',$('prefAccent').value);applyAccent();previewAppearance()}
 function resetAppearance(){localStorage.removeItem('deft_wallpaper');localStorage.setItem('deft_appearance',JSON.stringify(APPEARANCE_DEFAULTS));localStorage.setItem('deft_accent','violet');$('prefAccent').value='violet';loadAppearanceControls();applyAccent();applyAppearance();$('wallpaperFile').value='';if($('appearanceState'))$('appearanceState').textContent='Defaults restored'}
@@ -280,27 +285,49 @@ async function createProject(){const name=prompt('Project ka naam?');if(!name?.t
 function toggleProjectMemory(){if(!projects.length){createProject();return}$('projectEditor').hidden=!$('projectEditor').hidden;renderProjects()}
 async function saveProjectMemory(){const p=activeProject();if(!p)return;const name=$('projectName').value.trim(),memory=$('projectMemory').value;try{const r=await api('/api/projects/'+encodeURIComponent(p.id),{method:'PUT',body:JSON.stringify({name,memory})});const j=await r.json();if(!r.ok)throw Error(j.error);projects=projects.map(x=>x.id===p.id?j.project:x);renderProjects();$('projectStatus').textContent='Saved ✓'}catch(e){$('projectStatus').textContent=e.message}}
 async function deleteProject(){const p=activeProject();if(!p||!confirm('Delete '+p.name+' and its saved project memory?'))return;try{const r=await api('/api/projects/'+encodeURIComponent(p.id),{method:'DELETE'});if(!r.ok)throw Error('Delete failed');projects=projects.filter(x=>x.id!==p.id);activeProjectId='';renderProjects();$('projectEditor').hidden=true}catch(e){alert(e.message)}}
-function tab(m){amode=m;$('tIn').className=m==='in'?'on':'';$('tUp').className=m==='up'?'on':'';$('linv').style.display=m==='up'?'':'none';$('legalConsent').style.display=m==='up'?'flex':'none';
-  $('abtn').textContent=m==='in'?'Sign in':'Create account';$('aerr').textContent='';$('lp').autocomplete=m==='in'?'current-password':'new-password'}
-async function authGo(){const b=$('abtn');$('aerr').textContent='';
-  const body={username:$('lu').value.trim(),password:$('lp').value,invite:$('linv').value.trim()};
-  if(!body.username||!body.password){$('aerr').textContent='Username aur password daalo';return}
-  if(amode==='up'&&!$('legalAgree').checked){$('aerr').textContent='Account banane ke liye Terms aur Privacy Policy accept karo.';return}
-  body.legalAccepted=amode==='up'&&$('legalAgree').checked;
-  b.disabled=true;
-  try{
-    let r;
-    try{r=await fetch('/api/'+(amode==='in'?'login':'register'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}
-    catch(e){throw new Error('Network connection failed: '+e.message)}
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok){$('aerr').textContent=j.error||('Server error ('+r.status+').');return}
-    token=j.token;user=j.username;localStorage.setItem('deft_token',token);localStorage.setItem('deft_user',user);$('lp').value='';
-    try{await start()}catch(e){console.error('Post-login startup failed:',e);$('auth').style.display='none';$('aerr').textContent='Login successful, but chat startup failed: '+e.message}
-  }catch(e){console.error('Login request failed:',e);$('aerr').textContent='Could not reach login service. Check your connection and retry.'}
-  finally{b.disabled=false}
+function tab(m){amode=m;$('tIn').className=m==='in'?'on':'';$('tUp').className=m==='up'?'on':'';$('lemail').style.display=m==='up'?'':'none';$('verifyBox').style.display='none';$('forgotBtn').style.display=m==='in'?'':'none';$('legalConsent').style.display=m==='up'?'flex':'none';$('abtn').style.display='';$('lu').placeholder=m==='in'?'Username or email':'Username';$('abtn').textContent=m==='in'?'Sign in':'Create account';$('aerr').textContent='';$('lp').autocomplete=m==='in'?'current-password':'new-password'}
+async function authGo(){
+ const b=$('abtn');$('aerr').textContent='';
+ const body={username:$('lu').value.trim(),password:$('lp').value};
+ if(!body.username||!body.password){$('aerr').textContent='Username aur password daalo';return}
+ if(amode==='up'){
+  body.email=$('lemail').value.trim();
+  if(!body.email){$('aerr').textContent='Email address daalo';return}
+  if(!$('legalAgree').checked){$('aerr').textContent='Terms aur Privacy Policy accept karo.';return}
+  body.legalAccepted=true;
+ }
+ b.disabled=true;
+ try{
+  const r=await fetch('/api/'+(amode==='in'?'login':'register'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){$('aerr').textContent=j.error||('Server error ('+r.status+').');return}
+  if(amode==='up'&&j.verificationRequired){pendingSignupUser=j.username;$('verifyBox').style.display='block';$('abtn').style.display='none';$('aerr').textContent='Verification email sent. Check inbox/spam.';return}
+  await finishLogin(j);
+ }catch(e){$('aerr').textContent='Could not reach login service. Check connection and retry.'}
+ finally{b.disabled=false}
+}
+let pendingSignupUser='';
+async function verifyEmail(){
+ const code=$('verifyCode').value.trim();if(!pendingSignupUser||!(/^\d{6}$/.test(code))){$('aerr').textContent='6-digit code daalo.';return}
+ try{const r=await fetch('/api/verify-email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:pendingSignupUser,code})});const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Verification failed');await finishLogin(j)}
+ catch(e){$('aerr').textContent=e.message}
+}
+async function finishLogin(j){
+ token=j.token;user=j.username;localStorage.setItem('deft_token',token);localStorage.setItem('deft_user',user);$('lp').value='';
+ try{await start()}catch(e){console.error('Startup failed:',e);$('auth').style.display='none';$('aerr').textContent='Login successful, but startup failed: '+e.message}
+}
+async function forgotPassword(){
+ const email=prompt('Account email address:');if(!email)return;
+ try{
+  const r=await fetch('/api/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})}),j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');
+  const code=prompt('If the email is registered, a reset code was sent. Enter the 6-digit code:');if(!code)return;
+  const password=prompt('New password (8-128 characters):');if(!password)return;
+  const rr=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,code,password})}),jj=await rr.json();if(!rr.ok)throw Error(jj.error||'Reset failed');
+  $('aerr').textContent='Password reset. Sign in with your new password.';
+ }catch(e){$('aerr').textContent=e.message}
 }
 function logout(){token='';localStorage.removeItem('deft_token');chats=[];$('auth').style.display='flex'}
-async function start(){if(!(await load()))return;await loadPreferences();await loadProjects();$('auth').style.display='none';$('uname').textContent=user;$('av').textContent=user[0].toUpperCase();
+async function start(){if(!(await load()))return;await loadPreferences();await loadProjects();await loadStore();$('auth').style.display='none';$('uname').textContent=user;$('av').textContent=user[0].toUpperCase();
   if(!chats.length)newChat();else cur=chats[0].id;renderList();renderMsgs();const draft=localStorage.getItem('deft_draft_'+user);if(draft&&!$('inp').value)$('inp').value=draft;
 }
 function newChat(){const c={id:Date.now().toString(36),title:'New chat',messages:[]};chats.unshift(c);cur=c.id}
@@ -419,7 +446,7 @@ async function go(){
       if(i===a.length-1&&Array.isArray(m.imgs)&&m.imgs.length)
         return{role:m.role,content:[{type:'text',text:m.content},...m.imgs.map(u=>({type:'image_url',image_url:{url:u}}))]};
       return{role:m.role,content:m.content}});
-    const r=await fetch('/api/chat',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({messages:msgs,mode:$('mode').value||localStorage.getItem('deft_mode')||'',projectId:activeProjectId})});
+    const r=await fetch('/api/chat',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({messages:msgs,mode:$('mode').value||localStorage.getItem('deft_mode')||'',projectId:activeProjectId,model:$('modelChoice')?.value||''})});
     if(r.status===401){logout();throw new Error('AUTH')};if(r.status===429)throw new Error('RATE');if(!r.ok)throw new Error('API:'+(await r.text()).slice(0,200));
     const rd=r.body.getReader(),dc=new TextDecoder();let buf='';
     while(true){const{done,value}=await rd.read();if(done)break;buf+=dc.decode(value,{stream:true});
@@ -434,7 +461,7 @@ async function go(){
       e.message==='PROVIDER_ERROR'?'AI service temporarily unavailable hai. Thodi der baad retry karo.':
       e.message.startsWith('API:')?'Error: '+e.message.slice(4):'Server se connect nahi hua. Render free plan so jata hai, 1 minute baad try karo.';
       bd.textContent=m;c.messages.pop()}
-  }finally{ctrl=null;$('send').style.display='';$('stop').style.display='none';save()}
+  }finally{ctrl=null;$('send').style.display='';$('stop').style.display='none';save();loadStore()}
 }
 $('inp').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&innerWidth>760){e.preventDefault();send()}});
 $('inp').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=e.target.scrollHeight+'px';if(user)localStorage.setItem('deft_draft_'+user,e.target.value)});
@@ -467,7 +494,9 @@ async function loadPreferences(){
  $('prefAuditConsent').checked=userPrefs.auditConsent===true;
  $('prefLanguage').value=userPrefs.language||'auto';
  $('prefVoice').value=userPrefs.voiceLang||'en-IN';
- $('prefAccent').value=localStorage.getItem('deft_accent')||'violet';
+ $('prefAccent').value=userPrefs.accent||localStorage.getItem('deft_accent')||'violet';
+ if(userPrefs.appearance)localStorage.setItem('deft_appearance',JSON.stringify(userPrefs.appearance));
+ localStorage.setItem('deft_accent',$('prefAccent').value);
  loadAppearanceControls();applyAccent();applyAppearance();refreshNarratorStatus();
 }
 function openSettings(){settingsTab('general');$('settingsMsg').textContent='';loadPreferences();$('settingsModal').classList.add('open')}
@@ -481,7 +510,7 @@ function settingsTab(t){
 }
 async function savePreferences(){
  const btn=$('savePersonalBtn'),status=$('personalSaveStatus');
- const body={nickname:$('prefNickname').value.trim(),about:$('prefAbout').value.trim(),tone:$('prefTone').value,mode:$('prefMode').value,instructions:$('prefInstructions').value.trim(),language:$('prefLanguage').value,voiceLang:$('prefVoice').value,auditConsent:$('prefAuditConsent').checked};
+ const body={nickname:$('prefNickname').value.trim(),about:$('prefAbout').value.trim(),tone:$('prefTone').value,mode:$('prefMode').value,instructions:$('prefInstructions').value.trim(),language:$('prefLanguage').value,voiceLang:$('prefVoice').value,auditConsent:$('prefAuditConsent').checked,appearance:readAppearanceControls(),accent:$('prefAccent').value};
  if(btn){btn.disabled=true;btn.textContent='Saving…'}status.textContent='Saving to your account…';
  try{
   const r=await api('/api/preferences',{method:'PUT',body:JSON.stringify(body)});
@@ -497,6 +526,38 @@ async function savePreferences(){
  }catch(e){status.textContent='Not saved: '+e.message;$('settingsMsg').textContent=e.message}
  finally{if(btn){btn.disabled=false;btn.textContent='Save personalization'}}
 }
+
+let storeState={plans:[],contact:{},credits:{balance:0},models:[]};
+async function loadStore(){
+ try{const r=await api('/api/store');if(!r.ok)return;storeState=await r.json();$('creditCount').textContent=storeState.credits.balance;$('storeBalance').textContent='Balance: '+storeState.credits.balance+' credits · Plan: '+storeState.credits.plan;
+  const sel=$('modelChoice'),old=sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m;sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;
+  renderPlans();
+ }catch{}
+}
+function openPlans(){$('plansModal').style.display='block';loadStore()}
+function closePlans(){$('plansModal').style.display='none'}
+function renderPlans(){
+ const root=$('planCards');if(!root)return;root.replaceChildren();
+ for(const p of storeState.plans||[]){const card=document.createElement('div');card.style.cssText='border:1px solid var(--bd);border-radius:13px;padding:15px;margin:10px 0';
+  const h=document.createElement('h3');h.textContent=p.name+' · '+p.price;
+  const d=document.createElement('p');d.textContent=(p.description||'')+' · '+p.credits+' credits';
+  const b=document.createElement('button');b.textContent='Request plan';b.onclick=()=>requestPlan(p.id);card.append(h,d,b);root.append(card);
+ }
+}
+async function requestPlan(id){
+ try{const r=await api('/api/purchase-request',{method:'POST',body:JSON.stringify({planId:id})}),j=await r.json();if(!r.ok)throw Error(j.error||'Could not create request');
+  const c=j.contact||{};$('purchaseInfo').textContent=(j.alreadyPending?'You already have a pending request.\n':'Request sent.\n')+(c.message||'')+'\nDiscord: '+(c.discord||'Not set')+'\nPhone: '+(c.phone||'Not set')+'\n\nWait for the owner to review your request. Credits appear after approval.';
+ }catch(e){$('purchaseInfo').textContent=e.message}
+}
+async function generateImage(){
+ const promptText=prompt('Describe the image you want DeftAI to create:');if(!promptText?.trim())return;
+ $('send').disabled=true;
+ try{const r=await api('/api/image',{method:'POST',body:JSON.stringify({prompt:promptText})}),j=await r.json();if(!r.ok)throw Error(j.error||'Image generation failed');
+  const c=getChat(),m={role:'assistant',content:'Generated image · '+j.cost+' credits'};c.messages.push(m);const el=addMsg(m),img=document.createElement('img');img.src=j.image;img.alt='AI generated image';img.style.cssText='display:block;max-width:100%;border-radius:12px;margin-top:10px';el.appendChild(img);save();loadStore();
+ }catch(e){alert(e.message)}
+ finally{$('send').disabled=false}
+}
+
 window.addEventListener('keydown',e=>{
  if(e.key==='Escape'){closeSettings();return}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('chatSearch').focus();return}
