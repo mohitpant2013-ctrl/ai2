@@ -327,13 +327,16 @@ app.post('/api/tts',h(async(req,res)=>{
 }));
 app.post('/api/image',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
- if(!OPENAI_API_KEY)return res.status(503).json({error:'Image generation is not configured. Owner must add OPENAI_API_KEY.'});
+ if(!GEMINI_API_KEY)return res.status(503).json({error:'Image generation is not configured. Add GEMINI_API_KEY in Render.'});
  const prompt=String(req.body.prompt||'').trim().slice(0,2000);if(prompt.length<3)return res.status(400).json({error:'Describe the image first.'});
  const c=await userCredits(u),cost=20;if(c.balance<cost)return res.status(402).json({error:'Not enough credits. Open Plans to request more.'});
- const r=await fetch('https://api.openai.com/v1/images/generations',{method:'POST',headers:{Authorization:'Bearer '+OPENAI_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-image-1',prompt,size:'1024x1024',quality:'low',n:1})});
- const body=await r.json().catch(()=>({}));if(!r.ok){console.error('Image provider error:',r.status,JSON.stringify(body).slice(0,250));return res.status(502).json({error:'Image provider failed. Credits were not deducted.'});}
- const data=body.data?.[0]?.b64_json;if(!data)return res.status(502).json({error:'Image provider returned no image. Credits were not deducted.'});
- c.balance-=cost;c.updatedAt=Date.now();await kvSet('credits:'+u,c);res.json({ok:true,image:'data:image/png;base64,'+data,credits:c,cost});
+ const model=process.env.GEMINI_IMAGE_MODEL||'gemini-nano-banana-2.1';
+ const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent?key='+encodeURIComponent(GEMINI_API_KEY),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}}),signal:AbortSignal.timeout(90000)});
+ const body=await r.json().catch(()=>({}));if(!r.ok){console.error('Gemini image error:',r.status,JSON.stringify(body).slice(0,350));return res.status(502).json({error:'Gemini image provider failed. Credits were not deducted.'});}
+ const part=(body.candidates?.[0]?.content?.parts||[]).find(p=>p.inlineData?.data);
+ if(!part)return res.status(502).json({error:'Gemini returned no image. Credits were not deducted.'});
+ const data=part.inlineData.data,mime=part.inlineData.mimeType||'image/png';
+ c.balance-=cost;c.updatedAt=Date.now();await kvSet('credits:'+u,c);res.json({ok:true,image:'data:'+mime+';base64,'+data,credits:c,cost});
 }));
 
 app.get('/api/admin/knowledge', h(async (req,res) => { if (!adminOnly(req,res)) return; res.json({ documents: (await kvGet('kb:documents')) || [] }); }));
@@ -561,9 +564,9 @@ app.post('/api/chat', async (req, res) => {
     const creativeRequest = /\b(creative|creativity|brainstorm|ideas?|concepts?|design|story|storytelling|poem|joke|funny|original|unique|imagine|invent|script|thumbnail|video idea|content idea)\b/i.test(lastText);
     const systemText=sysPrompt(hasImg ? activeVision : activeModel, srcText, req.body.mode, [settings.systemPrompt,personalContext,projectContext].filter(Boolean).join('\n'));
     let r;
-    if(activeModel.startsWith('gemini-')&&!hasImg){
+    if(activeModel.startsWith('gemini-')){
       if(!GEMINI_API_KEY){send({error:'PROVIDER_ERROR',message:'Gemini is selected but GEMINI_API_KEY is missing in Render environment variables.'});return res.end();}
-      const contents=history.map(m=>({role:m.role==='assistant'?'model':'user',parts:Array.isArray(m.content)?m.content.map(p=>p.type==='text'?{text:p.text||''}:p.type==='image_url'?{text:'[Image attached]'}:{text:''}):[{text:String(m.content||'')}]}));
+      const contents=history.map(m=>({role:m.role==='assistant'?'model':'user',parts:Array.isArray(m.content)?m.content.map(p=>{if(p.type==='text')return {text:p.text||''};if(p.type==='image_url'){const raw=p.image_url?.url||'',match=raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);return match?{inlineData:{mimeType:match[1],data:match[2]}}:{text:'[Image omitted: unsupported URL format]'}}return {text:''}}):[{text:String(m.content||'')}]}));
       const gr=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(activeModel)+':generateContent?key='+encodeURIComponent(GEMINI_API_KEY),{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:systemText}]},contents,generationConfig:{temperature:creativeRequest?0.88:0.65,maxOutputTokens:maxTokens}})});
       const gj=await gr.json().catch(()=>({}));
       if(!gr.ok){console.error('Gemini request failed:',gr.status,JSON.stringify(gj).slice(0,350));send({error:'PROVIDER_ERROR',message:'Gemini provider failed (HTTP '+gr.status+'). Check model access and API key.'});return res.end();}
