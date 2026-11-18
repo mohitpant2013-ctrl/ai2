@@ -40,7 +40,9 @@ for(const level of ['log','info','warn','error']){
 }
 
 const fs = require('fs');
-const SECRET = process.env.TOKEN_SECRET || (KEY || '') + PASS + 'deftai';
+// Session signing must never depend on provider API keys: rotating Gemini/Groq keys must not invalidate accounts.
+const SECRET = process.env.TOKEN_SECRET || crypto.createHash('sha256').update('deftai-session-v1:' + PASS).digest('hex');
+if(!process.env.TOKEN_SECRET)console.warn('TOKEN_SECRET is not set. Set a long random TOKEN_SECRET in Render to protect sessions; this fallback remains stable across provider-key changes.');
 
 // Simple local JSON storage. No Redis or external database required.
 const DATA_DIR=process.env.DATA_DIR||(process.env.RENDER?'/var/data':path.join(__dirname,'data'));
@@ -62,7 +64,7 @@ const persist = () => {
   }
 };
 async function kvGet(k) { return mem[k] ?? null; }
-async function kvSet(k, v) { mem[k] = v; persist(); }
+async function kvSet(k, v) { mem[k] = v; persist(); if(saveError)throw new Error('Storage write failed: '+saveError); }
 const scrypt = (pw, salt) => new Promise((ok, no) => crypto.scrypt(pw, salt, 32, (e, k) => e ? no(e) : ok(k.toString('hex'))));
 const sign = u => { const b = Buffer.from(u + '|' + (Date.now() + 30 * 864e5)).toString('base64url'); return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url'); };
 function who(req) {
@@ -247,11 +249,11 @@ app.get('/api/admin/live-logs',(req,res)=>{
 app.get('/api/admin/storage', (req,res)=>{
  if(!adminOnly(req,res))return;
  let bytes=0;try{bytes=fs.statSync(FILE).size}catch{}
- res.json({directory:DATA_DIR,file:FILE,bytes,render:!!process.env.RENDER,persistentMountPathSelected:DATA_DIR==='/var/data',saveError});
+ let diskMounted=false;try{diskMounted=fs.statSync(DATA_DIR).dev!==fs.statSync('/').dev}catch{}res.json({directory:DATA_DIR,file:FILE,bytes,render:!!process.env.RENDER,persistentMountPathSelected:DATA_DIR==='/var/data',persistentDiskMounted:diskMounted,saveError});
 });
 app.get('/api/admin/users',h(async(req,res)=>{
  if(!adminOnly(req,res))return;
- const users=Object.keys(mem).filter(k=>k.startsWith('u:')).map(k=>{const u=mem[k]||{},name=u.name||k.slice(2),c=mem['credits:'+k.slice(2)]||{balance:100,plan:'Free'};return {username:name,email:u.email||'',createdAt:u.at||0,disabled:!!u.disabled,credits:c.balance,plan:c.plan||'Free'};}).sort((a,b)=>b.createdAt-a.createdAt);
+ const users=Object.keys(mem).filter(k=>k.startsWith('u:')).map(k=>{const u=mem[k]||{},name=u.name||k.slice(2),c=mem['credits:'+k.slice(2)]||{balance:300,plan:'Free'};return {username:name,email:u.email||'',createdAt:u.at||0,disabled:!!u.disabled,credits:c.balance,plan:c.plan||'Free'};}).sort((a,b)=>b.createdAt-a.createdAt);
  res.json({users});
 }));
 app.post('/api/admin/users/:username/status',h(async(req,res)=>{
@@ -344,8 +346,8 @@ app.post('/api/image',h(async(req,res)=>{
  const prompt=String(req.body.prompt||'').trim().slice(0,2000);if(prompt.length<3)return res.status(400).json({error:'Describe the image first.'});
  const c=await userCredits(u),cost=20;if(c.balance<cost)return res.status(402).json({error:'Not enough credits. Open Plans to request more.'});
  const model=process.env.GEMINI_IMAGE_MODEL||'gemini-nano-banana-2.1';
- const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent?key='+encodeURIComponent(GEMINI_API_KEY),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}}),signal:AbortSignal.timeout(90000)});
- const body=await r.json().catch(()=>({}));if(!r.ok){console.error('Gemini image error:',r.status,JSON.stringify(body).slice(0,350));return res.status(502).json({error:'Gemini image provider failed. Credits were not deducted.'});}
+ const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':GEMINI_API_KEY},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseModalities:['IMAGE','TEXT']}}),signal:AbortSignal.timeout(90000)});
+ const body=await r.json().catch(()=>({}));if(!r.ok){const detail=String(body.error?.message||'No provider detail returned').slice(0,220);console.error('Gemini image error:',r.status,body.error?.status||'UNKNOWN',detail);return res.status(502).json({error:'Gemini image error '+r.status+': '+detail+' Credits were not deducted.'});}
  const part=(body.candidates?.[0]?.content?.parts||[]).find(p=>p.inlineData?.data);
  if(!part)return res.status(502).json({error:'Gemini returned no image. Credits were not deducted.'});
  const data=part.inlineData.data,mime=part.inlineData.mimeType||'image/png';
@@ -383,7 +385,10 @@ async function retrieveKnowledge(query) {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/upgrade', (req, res) => res.sendFile(path.join(__dirname, 'upgrade.html')));
-app.get('/health', (req, res) => res.send('ok'));
+app.get('/health', (req, res) => {
+ let bytes=0,diskMounted=false;try{bytes=fs.statSync(FILE).size;diskMounted=fs.statSync(DATA_DIR).dev!==fs.statSync('/').dev}catch{}
+ res.status(saveError?503:200).json({ok:!saveError,storage:saveError?'write-error':diskMounted?'persistent-disk':'ephemeral',diskMounted,bytes,saveError:saveError||null});
+});
 
 let st = { t: 0, v: null };
 app.get('/api/status', async (req, res) => {
@@ -393,7 +398,9 @@ app.get('/api/status', async (req, res) => {
     const r = await fetch(G + '/models', { headers: { Authorization: 'Bearer ' + KEY }, signal: AbortSignal.timeout(5000) });
     groqOk = r.ok;
   } catch {}
-  st = { t: Date.now(), v: { server: true, groq: groqOk, gemini:!!GEMINI_API_KEY, openai:!!OPENAI_API_KEY, model: GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL, vision: VISION, web: false } };
+  let geminiOk=false,geminiError='';
+  if(GEMINI_API_KEY){try{const g=await fetch('https://generativelanguage.googleapis.com/v1beta/models',{headers:{'x-goog-api-key':GEMINI_API_KEY},signal:AbortSignal.timeout(5000)});geminiOk=g.ok;if(!g.ok){const j=await g.json().catch(()=>({}));geminiError=String(j.error?.message||'Gemini API key check failed').slice(0,160)}}catch(e){geminiError='Gemini API check timed out or could not connect'}}
+  st = { t: Date.now(), v: { server: true, groq: groqOk, gemini:geminiOk, geminiConfigured:!!GEMINI_API_KEY, geminiError, openai:!!OPENAI_API_KEY, model: GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL, vision: VISION, web: false } };
   res.json(st.v);
 });
 
@@ -592,9 +599,9 @@ app.post('/api/chat', async (req, res) => {
     if(activeModel.startsWith('gemini-')){
       if(!GEMINI_API_KEY){send({error:'PROVIDER_ERROR',message:'Gemini is selected but GEMINI_API_KEY is missing in Render environment variables.'});return res.end();}
       const contents=history.map(m=>({role:m.role==='assistant'?'model':'user',parts:Array.isArray(m.content)?m.content.map(p=>{if(p.type==='text')return {text:p.text||''};if(p.type==='image_url'){const raw=p.image_url?.url||'',match=raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);return match?{inlineData:{mimeType:match[1],data:match[2]}}:{text:'[Image omitted: unsupported URL format]'}}return {text:''}}):[{text:String(m.content||'')}]}));
-      const gr=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(activeModel)+':generateContent?key='+encodeURIComponent(GEMINI_API_KEY),{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:systemText}]},contents,generationConfig:{temperature:creativeRequest?0.88:0.65,maxOutputTokens:maxTokens}})});
+      const gr=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(activeModel)+':generateContent',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json','x-goog-api-key':GEMINI_API_KEY},body:JSON.stringify({systemInstruction:{parts:[{text:systemText}]},contents,generationConfig:{temperature:creativeRequest?0.88:0.65,maxOutputTokens:maxTokens}})});
       const gj=await gr.json().catch(()=>({}));
-      if(!gr.ok){console.error('Gemini request failed:',gr.status,JSON.stringify(gj).slice(0,350));send({error:'PROVIDER_ERROR',message:'Gemini provider failed (HTTP '+gr.status+'). Check model access and API key.'});return res.end();}
+      if(!gr.ok){const detail=String(gj.error?.message||'No provider detail returned').slice(0,220),code=gj.error?.status||gj.error?.code||'UNKNOWN';console.error('Gemini request failed:',gr.status,code,detail);send({error:'PROVIDER_ERROR',message:'Gemini error '+gr.status+' ('+code+'): '+detail});return res.end();}
       const answer=(gj.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
       if(!answer){send({error:'PROVIDER_ERROR',message:'Gemini returned an empty response.'});return res.end();}
       creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);
