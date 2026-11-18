@@ -79,7 +79,7 @@ async function groq(body, models, signal, effort = 'medium') {
   const tried = [...new Set(models.filter(Boolean))];
   for (const model of tried) {
     const b = { ...body, model };
-    if (model.startsWith('openai/gpt-oss')) b.reasoning_effort = effort;
+    
     if (model.startsWith('qwen/')) { b.reasoning_format = 'hidden'; b.reasoning_effort = effort; }
     r = await fetch(G + '/chat/completions', {
       method: 'POST', signal,
@@ -571,7 +571,8 @@ app.post('/api/chat', async (req, res) => {
     const maxTokens = Math.max(256, Math.min(900, Number(settings.maxCompletionTokens) || 700));
     const activeVision = settings.visionModel || activeModel;
     const creativeRequest = /\b(creative|creativity|brainstorm|ideas?|concepts?|design|story|storytelling|poem|joke|funny|original|unique|imagine|invent|script|thumbnail|video idea|content idea)\b/i.test(lastText);
-    const systemText=sysPrompt(hasImg ? activeVision : activeModel, srcText, req.body.mode, [settings.systemPrompt,personalContext,projectContext].filter(Boolean).join('\n'));
+    const promptModel=activeModel.startsWith('gemini-')?activeModel:(hasImg?activeVision:activeModel);
+    const systemText=sysPrompt(promptModel, srcText, req.body.mode, [settings.systemPrompt,personalContext,projectContext].filter(Boolean).join('\n'));
     let r;
     if(activeModel.startsWith('gemini-')){
       if(!GEMINI_API_KEY){send({error:'PROVIDER_ERROR',message:'Gemini is selected but GEMINI_API_KEY is missing in Render environment variables.'});return res.end();}
