@@ -182,7 +182,7 @@ body{background-color:var(--bg)!important}#main{background:transparent!important
       <textarea id="inp" rows="1" placeholder="DeftAI se kuch bhi poochho..."></textarea>
       <button id="stop" class="ib" onclick="ctrl&&ctrl.abort()" title="Stop"><i data-i="stop"></i></button>
       <button id="send" class="ib" onclick="send()" title="Send"><i data-i="up"></i></button>
-    </div><div id="composerTools"><label for="modelChoice">Model</label><select id="modelChoice" aria-label="Choose AI model"><option value="">Loading models…</option></select><span>DeftAI · Deft-Extra</span></div></div>
+    </div><div id="composerTools"><label for="modelChoice">Model</label><select id="modelChoice" aria-label="Choose AI model"><option value="">Loading models…</option></select><button type="button" id="incognitoToggle" class="incognito-toggle" onclick="toggleIncognito()" aria-pressed="false" title="Incognito: chats are not saved">◉ Incognito</button><span id="privacyStatus">DeftAI · Deft-Extra · Groq</span></div></div>
     <div class="fine">DeftAI galti kar sakta hai. Zaroori baatein sources se check karo.</div></div>
 </div>
 
@@ -245,7 +245,7 @@ body{background-color:var(--bg)!important}#main{background:transparent!important
 <script>
 const $=id=>document.getElementById(id);
 const ic=n=>'<svg class="ic"><use href="#i-'+n+'"/></svg>';
-let user=null,code='',chats=[],cur=null,pend=[],ctrl=null;
+let user=null,code='',chats=[],cur=null,pend=[],ctrl=null,incognitoMode=false,normalChatsSnapshot=null,normalCurSnapshot=null;
 const key=()=>'deft_chats_'+user;
 let userPrefs={nickname:'',tone:'natural',about:'',instructions:'',language:'auto',voiceLang:'en-IN'};
 function scrollChat(){const el=$('chat');if(el)requestAnimationFrame(()=>el.scrollTo({top:el.scrollHeight,behavior:'auto'}))}
@@ -279,7 +279,7 @@ function paint(d,t,src){
 const slim=()=>chats.map(c=>({id:c.id,title:c.title,messages:c.messages.map(m=>({role:m.role,content:m.content,shown:m.shown,files:m.files,imgs:Array.isArray(m.imgs)?m.imgs.length:m.imgs,sources:m.sources}))}));
 const api=(p,o={})=>fetch(p,{...o,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token}});
 let st_t;
-function save(){clearTimeout(st_t);if($('syncStatus'))$('syncStatus').textContent='Saving…';st_t=setTimeout(async()=>{const d=slim();while(JSON.stringify(d).length>900000&&d.length>1)d.pop();
+function save(){if(incognitoMode){if($('syncStatus'))$('syncStatus').textContent='Incognito · not saved';return}clearTimeout(st_t);if($('syncStatus'))$('syncStatus').textContent='Saving…';st_t=setTimeout(async()=>{const d=slim();while(JSON.stringify(d).length>900000&&d.length>1)d.pop();
   try{const r=await api('/api/chats',{method:'PUT',body:JSON.stringify({chats:d})});if(!r.ok)throw Error('HTTP '+r.status);localStorage.setItem('deft_chats_'+user,JSON.stringify(d));if($('syncStatus'))$('syncStatus').textContent='Saved to account ✓'}catch(e){try{localStorage.setItem('deft_chats_'+user,JSON.stringify(d))}catch{}if($('syncStatus'))$('syncStatus').textContent='Local backup · server retry needed';console.error('Chat sync failed:',e)}},450)}
 async function load(){try{const r=await api('/api/chats');if(r.status===401){logout();return false}if(!r.ok)throw Error('Chat load HTTP '+r.status);chats=(await r.json()).chats||[];if(chats.length)localStorage.setItem('deft_chats_'+user,JSON.stringify(chats))}catch(e){console.error('Chat load failed:',e);try{chats=JSON.parse(localStorage.getItem('deft_chats_'+user))||[]}catch{chats=[]}}
   if(!chats.length){try{chats=JSON.parse(localStorage.getItem('deft_chats_'+user))||[];if(chats.length)save()}catch{}}return true}
@@ -338,7 +338,16 @@ function logout(){token='';localStorage.removeItem('deft_token');chats=[];$('aut
 async function start(){if(!(await load()))return;await loadPreferences();await loadProjects();await loadStore();$('auth').style.display='none';$('uname').textContent=user;$('av').textContent=user[0].toUpperCase();
   if(!chats.length)newChat();else cur=chats[0].id;renderList();renderMsgs();const draft=localStorage.getItem('deft_draft_'+user);if(draft&&!$('inp').value)$('inp').value=draft;
 }
-function newChat(){const c={id:Date.now().toString(36),title:'New chat',messages:[]};chats.unshift(c);cur=c.id}
+function newChat(){const c={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),title:incognitoMode?'Incognito chat':'New chat',messages:[]};chats.unshift(c);cur=c.id}
+function toggleIncognito(){
+ if(ctrl){alert('Pehle current response stop hone do.');return}
+ incognitoMode=!incognitoMode;
+ if(incognitoMode){normalChatsSnapshot=chats;normalCurSnapshot=cur;chats=[];cur=null;newChat();}
+ else{chats=normalChatsSnapshot||[];cur=normalCurSnapshot;normalChatsSnapshot=null;normalCurSnapshot=null;if(!chats.length){newChat()}}
+ const b=$('incognitoToggle');if(b){b.classList.toggle('active',incognitoMode);b.setAttribute('aria-pressed',String(incognitoMode));b.textContent=incognitoMode?'◉ Incognito on':'◉ Incognito'}
+ if($('privacyStatus'))$('privacyStatus').textContent=incognitoMode?'This chat will not be saved':'DeftAI · Deft-Extra · Groq';
+ if($('syncStatus'))$('syncStatus').textContent=incognitoMode?'Incognito · not saved':'Normal chat mode';renderList();renderMsgs();$('inp').focus();
+}
 const getChat=()=>chats.find(c=>c.id===cur);
 
 function renderList(){const l=$('list');l.innerHTML='';const q=($('chatSearch')?.value||'').trim().toLowerCase();
@@ -500,7 +509,7 @@ if('speechSynthesis' in window)speechSynthesis.addEventListener('voiceschanged',
 
 // ---- Model status ----
 async function status(){const d=$('dot'),t=$('stxt');
-  try{const s=await(await fetch('/api/status')).json();d.className='dot '+((s.gemini||s.openai||s.groq)?'on':'off');t.textContent=s.gemini?'DeftAI Online':s.geminiConfigured?'Gemini key error':'Offline';t.title=[s.geminiError||'',s.durableStorage?'Storage: durable':'Storage: temporary · attach Render disk at /var/data'].filter(Boolean).join('\\n')}
+  try{const s=await(await fetch('/api/status')).json();d.className='dot '+((s.gemini||s.openai||s.groq)?'on':'off');t.textContent=(s.gemini||s.groq)?'DeftAI Online':s.geminiConfigured?'Gemini key error':'Offline';t.title=['Gemini: '+(s.gemini?'online':s.geminiConfigured?(s.geminiError||'error'):'not configured'),'Groq: '+(s.groq?'online':'not configured'),s.durableStorage?'Storage: durable':'Storage: local on Render (ephemeral; may reset on redeploy)'].join('\\n')}
   catch{d.className='dot wait';t.textContent='Server jag raha hai... (30-60 sec)'}}
 
 
@@ -556,7 +565,7 @@ async function savePreferences(){
 let storeState={plans:[],contact:{},credits:{balance:0},models:[]};
 async function loadStore(){
  try{const r=await api('/api/store');if(!r.ok)return;storeState=await r.json();$('creditCount').textContent=storeState.credits.balance;$('storeBalance').textContent='Balance: '+storeState.credits.balance+' credits · Plan: '+storeState.credits.plan;
-  const sel=$('modelChoice'),old=localStorage.getItem('deft_model')||sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m==='gemini-2.5-pro'?'Deft-Extra':m.startsWith('gemini-')?'DeftAI':'DeftAI · '+m;sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;else if((storeState.models||[]).includes('gemini-3.8-flash'))sel.value='gemini-3.8-flash';else if((storeState.models||[]).length)sel.value=storeState.models[0];localStorage.setItem('deft_model',sel.value);
+  const sel=$('modelChoice'),old=localStorage.getItem('deft_model')||sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m==='gemini-2.5-pro'?'Deft-Extra · Gemini':m.startsWith('gemini-')?'DeftAI · Gemini':'DeftAI · Groq';sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;else if((storeState.models||[]).length)sel.value=storeState.models[0];localStorage.setItem('deft_model',sel.value);
   renderPlans();
  }catch{}
 }
@@ -636,6 +645,7 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{an
 #composerTools{display:flex;align-items:center;gap:8px;padding:6px 8px 1px;border-top:1px solid var(--bd);margin-top:6px;color:var(--mu);font-size:11px}
 #composerTools label{font-size:11px;color:var(--mu)}
 #composerTools{display:flex;align-items:center;gap:8px;padding:6px 8px 1px;border-top:1px solid var(--bd);margin-top:6px;color:var(--mu);font-size:11px}#composerTools label{font-size:11px;color:var(--mu)}#modelChoice{max-width:180px;min-width:118px;background:var(--el);color:var(--tx);border:1px solid var(--bd);border-radius:9px;padding:6px 9px;font:inherit;font-size:12px;outline:none}#modelChoice:focus{border-color:var(--ac);box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 18%,transparent)}#composerTools span{margin-left:auto;opacity:.7}
+.incognito-toggle{border:1px solid var(--bd);background:var(--el);color:var(--tx);border-radius:9px;padding:6px 9px;font:inherit;font-size:11px;white-space:nowrap;cursor:pointer}.incognito-toggle.active{background:#33251a;border-color:#a66b37;color:#ffd6a5}
 #modelChoice:focus{border-color:var(--ac);box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 18%,transparent)}
 #composerTools span{margin-left:auto;opacity:.7}
 #mode{max-width:110px;min-width:0}
@@ -656,7 +666,7 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{an
  #row>button{padding:7px 6px;min-width:32px}
  #row textarea{min-width:0;font-size:16px;max-height:120px;padding:7px 4px}
  #composerTools{gap:6px;padding:6px 4px 0}
- #composerTools span{display:none}
+ #composerTools span{display:none}.incognito-toggle{font-size:10px;padding:6px 7px}
  #modelChoice{max-width:150px;min-width:0;flex:1}
  #side{width:min(84vw,300px);padding:12px;max-width:300px}
  .wrap{gap:18px}
