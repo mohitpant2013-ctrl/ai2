@@ -129,7 +129,7 @@ body,#main,#side,#auth,#main{background:#000!important}
   <div class="tabs"><button id="tIn" class="on" onclick="tab('in')">Sign in</button><button id="tUp" onclick="tab('up')">Create account</button></div>
   <input id="lu" placeholder="Username or email" autocomplete="username">
   <input id="lemail" type="email" placeholder="Email address" autocomplete="email" style="display:none">
-  <div id="verifyBox" style="display:none"><p class="sub">Email par 6-digit code bheja hai.</p><input id="verifyCode" inputmode="numeric" maxlength="6" placeholder="6-digit verification code"><button type="button" onclick="verifyEmail()">Verify email</button></div>
+  
   <input id="lp" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')authGo()">
   <button type="button" id="forgotBtn" class="secondary" onclick="forgotPassword()" style="width:100%;margin-top:8px">Forgot password?</button>
     <label id="legalConsent" style="display:none;font-size:12px;line-height:1.5;color:#aaa;gap:8px;align-items:flex-start"><input id="legalAgree" type="checkbox" style="width:auto;margin-top:3px"> I agree to the <a href="/legal" target="_blank" rel="noopener" style="color:#ddd">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener" style="color:#ddd">Privacy & Data Policy</a>.</label>
@@ -177,7 +177,7 @@ body,#main,#side,#auth,#main{background:#000!important}
 </div>
 
 
-<div id="plansModal" style="display:none;position:fixed;inset:0;z-index:100;background:#000c;overflow:auto;padding:20px"><section style="max-width:760px;margin:5vh auto;background:var(--panel);border:1px solid var(--bd);border-radius:18px;padding:22px"><div style="display:flex;justify-content:space-between;align-items:center"><h2>DeftAI Plans</h2><button onclick="closePlans()">✕</button></div><p id="storeBalance"></p><div id="planCards"></div><p id="purchaseInfo" style="white-space:pre-wrap"></p><small>1 credit per chat request · 20 credits per generated image. Purchases are reviewed manually; credits are added only after owner approval.</small></section></div>
+<div id="plansModal" style="display:none;position:fixed;inset:0;z-index:100;background:#000c;overflow:auto;padding:20px"><section style="max-width:760px;margin:5vh auto;background:var(--panel);border:1px solid var(--bd);border-radius:18px;padding:22px"><div style="display:flex;justify-content:space-between;align-items:center"><h2>DeftAI Plans</h2><button onclick="closePlans()">✕</button></div><p id="storeBalance"></p><div id="planCards"></div><p id="purchaseInfo" style="white-space:pre-wrap"></p><small>1 credit per chat request. Purchases are reviewed manually; credits are added only after owner approval.</small></section></div>
 <div id="settingsModal">
 <section id="settingsCard" role="dialog" aria-modal="true" aria-label="Settings">
 <aside class="settingsNav">
@@ -196,7 +196,7 @@ body,#main,#side,#auth,#main{background:#000!important}
 <div id="paneGeneral" class="setPane"><h2>General</h2><p>Choose how DeftAI behaves by default.</p><div class="settingChoice"><b>Keyboard shortcuts</b><small>Ctrl + K: Search · Ctrl + Enter: Send · Ctrl + Shift + N: New chat · /: Message box</small></div>
 <label>Default response mode</label><select id="prefMode"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select>
 <label>Voice narrator language</label><select id="prefVoice" onchange="previewNarratorLanguage(this.value)"><option value="en-IN">English (India)</option><option value="hi-IN">Hindi</option><option value="pa-IN">Punjabi (India)</option></select>
-<div class="settingChoice"><b>Narrator status</b><small id="voiceStatus" aria-live="polite">Checking voices on this device…</small><button type="button" onclick="testNarrator()">▶ Test narrator</button><small>Punjabi needs an installed Punjabi speech voice. If unavailable, DeftAI clearly reports and uses a Hindi fallback.</small></div>
+<div class="settingChoice"><b>Narrator status</b><small id="voiceStatus" aria-live="polite">Checking voices on this device…</small><button type="button" onclick="testNarrator()">▶ Test narrator</button><small>Punjabi narration uses a cloud voice; local Punjabi speech installation is not needed.</small></div>
 </div>
 <div id="panePersonal" class="setPane" hidden>
 <h2>Personalization</h2><p>Set how DeftAI should talk and respond. These preferences are saved to your account.</p>
@@ -284,7 +284,7 @@ async function createProject(){const name=prompt('Project ka naam?');if(!name?.t
 function toggleProjectMemory(){if(!projects.length){createProject();return}$('projectEditor').hidden=!$('projectEditor').hidden;renderProjects()}
 async function saveProjectMemory(){const p=activeProject();if(!p)return;const name=$('projectName').value.trim(),memory=$('projectMemory').value;try{const r=await api('/api/projects/'+encodeURIComponent(p.id),{method:'PUT',body:JSON.stringify({name,memory})});const j=await r.json();if(!r.ok)throw Error(j.error);projects=projects.map(x=>x.id===p.id?j.project:x);renderProjects();$('projectStatus').textContent='Saved ✓'}catch(e){$('projectStatus').textContent=e.message}}
 async function deleteProject(){const p=activeProject();if(!p||!confirm('Delete '+p.name+' and its saved project memory?'))return;try{const r=await api('/api/projects/'+encodeURIComponent(p.id),{method:'DELETE'});if(!r.ok)throw Error('Delete failed');projects=projects.filter(x=>x.id!==p.id);activeProjectId='';renderProjects();$('projectEditor').hidden=true}catch(e){alert(e.message)}}
-function tab(m){amode=m;$('tIn').className=m==='in'?'on':'';$('tUp').className=m==='up'?'on':'';$('lemail').style.display=m==='up'?'':'none';$('verifyBox').style.display='none';$('forgotBtn').style.display=m==='in'?'':'none';$('legalConsent').style.display=m==='up'?'flex':'none';$('abtn').style.display='';$('lu').placeholder=m==='in'?'Username or email':'Username';$('abtn').textContent=m==='in'?'Sign in':'Create account';$('aerr').textContent='';$('lp').autocomplete=m==='in'?'current-password':'new-password'}
+function tab(m){amode=m;$('tIn').className=m==='in'?'on':'';$('tUp').className=m==='up'?'on':'';$('lemail').style.display=m==='up'?'':'none';$('forgotBtn').style.display=m==='in'?'':'none';$('legalConsent').style.display=m==='up'?'flex':'none';$('abtn').style.display='';$('lu').placeholder=m==='in'?'Username or email':'Username';$('abtn').textContent=m==='in'?'Sign in':'Create account';$('aerr').textContent='';$('lp').autocomplete=m==='in'?'current-password':'new-password'}
 async function authGo(){
  const b=$('abtn');$('aerr').textContent='';
  const body={username:$('lu').value.trim(),password:$('lp').value};
@@ -300,7 +300,6 @@ async function authGo(){
   const r=await fetch('/api/'+(amode==='in'?'login':'register'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const j=await r.json().catch(()=>({}));
   if(!r.ok){$('aerr').textContent=j.error||('Server error ('+r.status+').');return}
-  if(amode==='up'&&j.verificationRequired){pendingSignupUser=j.username;$('verifyBox').style.display='block';$('abtn').style.display='none';$('aerr').textContent='Verification email sent. Check inbox/spam.';return}
   await finishLogin(j);
  }catch(e){$('aerr').textContent='Could not reach login service. Check connection and retry.'}
  finally{b.disabled=false}
@@ -373,11 +372,29 @@ function previewNarratorLanguage(lang){userPrefs.voiceLang=lang;if('speechSynthe
 function recognitionLanguage(){const l=userPrefs.language||'auto';return l==='pa'?'pa-IN':(l==='hi'||l==='hinglish')?'hi-IN':l==='en'?'en-IN':voiceLanguage()}
 function availableSpeechVoices(){return ('speechSynthesis' in window)?speechSynthesis.getVoices():[]}
 function pickSpeechVoice(lang){const voices=availableSpeechVoices(),prefix=lang.toLowerCase().split('-')[0];return voices.find(v=>v.lang.toLowerCase()===lang.toLowerCase())||voices.find(v=>v.lang.toLowerCase().startsWith(prefix+'-'))||null}
-function refreshNarratorStatus(){const el=$('voiceStatus');if(!el)return;const lang=voiceLanguage(),voice=pickSpeechVoice(lang);if(voice){el.textContent='Ready: '+voice.name+' ('+voice.lang+').';return}if(lang==='pa-IN'){const fb=pickSpeechVoice('hi-IN');el.textContent=fb?'Punjabi voice unavailable. Hindi fallback available: '+fb.name+' ('+fb.lang+').':'No Punjabi or Hindi voice found. Install a Punjabi/Hindi speech voice in Windows or use a browser that provides one.';return}if(lang==='hi-IN'){el.textContent='Hindi voice not available on this device/browser. Install a Hindi speech voice; English will not be used as a fake Hindi voice.';return}el.textContent='No Indian English voice found. An available English voice may be used for English narration.'}
-function speakText(text){if(!('speechSynthesis' in window))return alert('Narrator is not supported in this browser.');if(speechSynthesis.speaking){speechSynthesis.cancel();return}
- const lang=voiceLanguage();let voice=pickSpeechVoice(lang);if(!voice&&lang==='pa-IN')voice=pickSpeechVoice('hi-IN');if(!voice&&lang==='en-IN')voice=availableSpeechVoices().find(v=>v.lang.toLowerCase().startsWith('en-'))||null;
- if(!voice){refreshNarratorStatus();alert(lang==='hi-IN'?'Hindi speech voice is not installed. Add a Hindi voice in Windows Settings > Time & Language > Speech.':lang==='pa-IN'?'Punjabi/Hindi speech voice is not installed. Add one in Windows Settings > Time & Language > Speech.':'No English speech voice is available in this browser.');return}
- const u=new SpeechSynthesisUtterance(clean(String(text)).replace(/[#*\x60_>\[\]]/g,''));u.lang=voice.lang;u.voice=voice;u.rate=.96;u.onerror=()=>{const el=$('voiceStatus');if(el)el.textContent='The selected voice failed to start. Check Windows speech settings.'};speechSynthesis.speak(u)}
+function refreshNarratorStatus(){const el=$('voiceStatus');if(!el)return;const lang=voiceLanguage(),voice=pickSpeechVoice(lang);if(voice){el.textContent='Ready: '+voice.name+' ('+voice.lang+').';return}if(lang==='pa-IN'){fetch('/api/voice-status').then(r=>r.json()).then(v=>{if($('voiceStatus'))$('voiceStatus').textContent=v.punjabiCloud?'Cloud Punjabi voice ready · pa-IN-OjasNeural':'Cloud Punjabi voice needs Azure Speech configuration.'}).catch(()=>{if($('voiceStatus'))$('voiceStatus').textContent='Cloud Punjabi voice status unavailable.'});return}if(lang==='hi-IN'){el.textContent='Hindi voice not available on this device/browser. Install a Hindi speech voice; English will not be used as a fake Hindi voice.';return}el.textContent='No Indian English voice found. An available English voice may be used for English narration.'}
+let cloudNarratorAudio=null;
+async function speakText(text){
+ const lang=voiceLanguage();
+ if(lang==='pa-IN'){
+  if(cloudNarratorAudio){cloudNarratorAudio.pause();cloudNarratorAudio=null;return}
+  const el=$('voiceStatus');if(el)el.textContent='Generating Punjabi voice…';
+  try{
+   const r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({text:String(text).slice(0,3500)})});
+   if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'Punjabi voice failed.')}
+   const url=URL.createObjectURL(await r.blob());cloudNarratorAudio=new Audio(url);
+   cloudNarratorAudio.onended=()=>{URL.revokeObjectURL(url);cloudNarratorAudio=null;if(el)el.textContent='Cloud Punjabi voice ready.'};
+   cloudNarratorAudio.onerror=()=>{URL.revokeObjectURL(url);cloudNarratorAudio=null;if(el)el.textContent='Punjabi audio playback failed.'};
+   await cloudNarratorAudio.play();if(el)el.textContent='Speaking Punjabi…';
+  }catch(e){if(el)el.textContent=e.message;alert(e.message)}
+  return;
+ }
+ if(!('speechSynthesis' in window))return alert('Narrator is not supported in this browser.');
+ if(speechSynthesis.speaking){speechSynthesis.cancel();return}
+ let voice=pickSpeechVoice(lang);if(!voice&&lang==='en-IN')voice=availableSpeechVoices().find(v=>v.lang.toLowerCase().startsWith('en-'))||null;
+ if(!voice){refreshNarratorStatus();alert(lang==='hi-IN'?'Hindi speech voice is not installed. Add a Hindi voice in Windows Settings > Time & Language > Speech.':'No English speech voice is available in this browser.');return}
+ const u=new SpeechSynthesisUtterance(String(text));u.lang=voice.lang;u.voice=voice;u.rate=.96;u.onerror=()=>{const el=$('voiceStatus');if(el)el.textContent='The selected voice failed to start.'};speechSynthesis.speak(u)
+}
 function testNarrator(){const l=voiceLanguage(),samples={'en-IN':'Hello! This is the DeftAI narrator test.','hi-IN':'नमस्ते! यह डेफ्ट एआई की आवाज़ का परीक्षण है।','pa-IN':'ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਇਹ ਡੈਫਟ ਏਆઈ ਦੀ ਆਵਾਜ਼ ਦੀ ਜਾਂਚ ਹੈ।'};speakText(samples[l]||samples['en-IN'])}
 if('speechSynthesis' in window){speechSynthesis.addEventListener('voiceschanged',refreshNarratorStatus);setTimeout(refreshNarratorStatus,250)}
 function downloadAnswer(content,ext){

@@ -20,6 +20,14 @@ async function sendAuthEmail(to,subject,html){
  if(!r.ok){const body=await r.text();console.error('Email provider error:',r.status,body.slice(0,250));throw new Error('Email could not be sent. Check sender/domain configuration.');}
 }
 const crypto = require('crypto');
+
+const liveLogBuffer=[],liveLogClients=new Set();
+function cleanLogValue(value){let out;try{out=typeof value==='string'?value:JSON.stringify(value)}catch{out=String(value)}return String(out||'').replace(/(Bearer\s+)[A-Za-z0-9._-]+/gi,'$1[REDACTED]').replace(/(api[_-]?key|token|password|secret)(["'\s:=]+)[^"'\s,}]+/gi,'$1$2[REDACTED]').slice(0,1200);}
+for(const level of ['log','info','warn','error']){
+ const original=console[level].bind(console);
+ console[level]=(...args)=>{const item={at:Date.now(),level,message:args.map(cleanLogValue).join(' ')};liveLogBuffer.unshift(item);if(liveLogBuffer.length>250)liveLogBuffer.length=250;for(const client of liveLogClients){try{client.write('data: '+JSON.stringify(item)+'\n\n')}catch{liveLogClients.delete(client)}}original(...args)};
+}
+
 const fs = require('fs');
 const SECRET = process.env.TOKEN_SECRET || (KEY || '') + PASS + 'deftai';
 
@@ -206,6 +214,27 @@ app.post('/api/admin/login', (req, res) => {
   res.json({ token: makeAdminToken() });
 });
 app.get('/api/admin/settings', h(async (req, res) => { if (!adminOnly(req,res)) return; res.json(await getSettings()); }));
+
+app.get('/api/admin/live-logs',(req,res)=>{
+ if(!adminOnly(req,res))return;
+ res.setHeader('Content-Type','text/event-stream');res.setHeader('Cache-Control','no-cache, no-transform');res.setHeader('Connection','keep-alive');res.flushHeaders?.();
+ res.write('data: '+JSON.stringify({type:'snapshot',logs:liveLogBuffer.slice(0,100)})+'\n\n');
+ liveLogClients.add(res);req.on('close',()=>liveLogClients.delete(res));
+});
+app.get('/api/admin/users',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;
+ const users=Object.keys(mem).filter(k=>k.startsWith('u:')).map(k=>{const u=mem[k]||{},name=u.name||k.slice(2),c=mem['credits:'+k.slice(2)]||{balance:100,plan:'Free'};return {username:name,email:u.email||'',createdAt:u.at||0,disabled:!!u.disabled,credits:c.balance,plan:c.plan||'Free'};}).sort((a,b)=>b.createdAt-a.createdAt);
+ res.json({users});
+}));
+app.post('/api/admin/users/:username/status',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;
+ const key='u:'+String(req.params.username||'').toLowerCase(),u=await kvGet(key);
+ if(!u)return res.status(404).json({error:'User not found.'});
+ u.disabled=req.body.disabled===true;await kvSet(key,u);
+ await appendAudit({type:'account_status',username:u.name,detail:u.disabled?'Account disabled by owner':'Account re-enabled by owner'});
+ res.json({ok:true,disabled:u.disabled});
+}));
+
 app.get('/api/admin/logs', h(async (req,res) => {
   if (!adminOnly(req,res)) return;
   const logs=(await kvGet('audit:events'))||[];
@@ -221,7 +250,7 @@ app.put('/api/admin/settings', h(async (req, res) => {
   const body = req.body || {};
   const model = String(body.model || MODEL);
   const effort = ['low','medium','high'].includes(body.reasoningEffort) ? body.reasoningEffort : 'medium';
-  const max = Math.max(256, Math.min(700, Number(body.maxCompletionTokens) || 700));
+  const max = Math.max(256, Math.min(900, Number(body.maxCompletionTokens) || 700));
   const systemPrompt = String(body.systemPrompt || '').slice(0, 6000);
   const allowedModels=[...new Set((Array.isArray(body.allowedModels)?body.allowedModels:String(body.allowedModels||'').split(String.fromCharCode(10)).flatMap(x=>x.split(','))).map(x=>String(x).trim()).filter(x=>/^[a-zA-Z0-9._/-]{3,100}$/.test(x)))].slice(0,20);
   const safeModels=allowedModels.length?allowedModels:[model],chosen=safeModels.includes(model)?model:safeModels[0];
@@ -229,7 +258,7 @@ app.put('/api/admin/settings', h(async (req, res) => {
   res.json({ ok: true });
 }));
 
-async function getCommerce(){return {...{plans:[],contact:{discord:'',phone:'',message:'Contact the owner to complete your purchase.'}},...(await kvGet('commerce:settings')||{})};}
+async function getCommerce(){return {...{plans:[{id:'free',name:'Free',price:'₹0',credits:100,description:'A simple starter plan.',active:true},{id:'plus',name:'Plus',price:'Contact owner',credits:1000,description:'More room for everyday chats.',active:true},{id:'pro',name:'Pro',price:'Contact owner',credits:5000,description:'For heavier use.',active:true}],contact:{discord:'',phone:'',message:'Contact the owner to complete your purchase.'}},...(await kvGet('commerce:settings')||{})};}
 async function userCredits(username){let c=await kvGet('credits:'+username);if(!c){c={balance:100,plan:'Free',updatedAt:Date.now()};await kvSet('credits:'+username,c);}return c;}
 app.get('/api/store',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const cfg=await getCommerce(),settings=await getSettings(),credits=await userCredits(u);res.json({plans:(cfg.plans||[]).filter(p=>p.active),contact:cfg.contact,credits,models:settings.allowedModels||[settings.model||MODEL]});}));
 app.post('/api/purchase-request',h(async(req,res)=>{
@@ -264,6 +293,21 @@ app.post('/api/admin/credits',h(async(req,res)=>{
  if(!username||!Number.isFinite(amount)||amount===0||Math.abs(amount)>1000000)return res.status(400).json({error:'Valid username and non-zero credit amount required.'});
  if(!await kvGet('u:'+username))return res.status(404).json({error:'User not found.'});
  const c=await userCredits(username);c.balance=Math.max(0,Math.min(10000000,c.balance+amount));c.updatedAt=Date.now();await kvSet('credits:'+username,c);res.json({ok:true,credits:c});
+}));
+
+const AZURE_SPEECH_KEY=process.env.AZURE_SPEECH_KEY||'',AZURE_SPEECH_REGION=process.env.AZURE_SPEECH_REGION||'centralindia';
+app.get('/api/voice-status',(req,res)=>res.json({punjabiCloud:!!AZURE_SPEECH_KEY,voice:'pa-IN-OjasNeural'}));
+app.post('/api/tts',h(async(req,res)=>{
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
+ if(!AZURE_SPEECH_KEY)return res.status(503).json({error:'Cloud Punjabi voice is not configured. Add AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in Render.'});
+ const text=String(req.body.text||'').trim().slice(0,3500);if(!text)return res.status(400).json({error:'Text required.'});
+ const voice=req.body.voice==='female'?'pa-IN-VaaniNeural':'pa-IN-OjasNeural';
+ const esc=v=>v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+ const ssml='<speak version="1.0" xml:lang="pa-IN"><voice name="'+voice+'">'+esc(text)+'</voice></speak>';
+ const endpoint='https://'+AZURE_SPEECH_REGION+'.tts.speech.microsoft.com/cognitiveservices/v1';
+ const r=await fetch(endpoint,{method:'POST',headers:{'Ocp-Apim-Subscription-Key':AZURE_SPEECH_KEY,'Content-Type':'application/ssml+xml','X-Microsoft-OutputFormat':'audio-24khz-48kbitrate-mono-mp3'},body:ssml,signal:AbortSignal.timeout(20000)});
+ if(!r.ok){const detail=(await r.text().catch(()=>'' )).slice(0,180);console.error('Azure TTS failed:',r.status,detail);return res.status(502).json({error:'Cloud voice provider failed ('+r.status+').'});}
+ res.setHeader('Content-Type','audio/mpeg');res.setHeader('Cache-Control','no-store');res.send(Buffer.from(await r.arrayBuffer()));
 }));
 app.post('/api/image',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
@@ -340,39 +384,25 @@ app.post('/api/register',h(async(req,res)=>{
  if(!EMAIL.test(email)||email.length>254)return res.status(400).json({error:'Valid email address daalo.'});
  if(password.length<8||password.length>128)return res.status(400).json({error:'Password 8-128 characters ka hona chahiye.'});
  if(req.body.legalAccepted!==true)return res.status(400).json({error:'Terms aur Privacy Policy accept karna zaroori hai.'});
- if(!RESEND_API_KEY)return res.status(503).json({error:'Email verification is not configured. Owner ko RESEND_API_KEY check karna hoga.'});
  const ip=req.ip||'unknown',normalized=username.toLowerCase(),k='u:'+normalized;
  if(recent(registerAttempts,ip,600000).length>=8)return res.status(429).json({error:'Too many signup attempts. Thodi der baad try karo.'});
  if(registering.has(k))return res.status(409).json({error:'Signup is already processing for this username.'});
  if(await kvGet(k)||await kvGet('email:'+email))return res.status(409).json({error:'Username ya email already registered hai.'});
  registering.add(k);recordAttempt(registerAttempts,ip,600000);
  try{
-  const salt=crypto.randomBytes(16).toString('hex'),hash=await scrypt(password,salt),code=String(crypto.randomInt(100000,1000000));
-  await kvSet('pending-signup:'+normalized,{name:username,email,salt,hash,codeHash:codeHash(code),expiresAt:Date.now()+900000,legalAcceptedAt:new Date().toISOString(),legalVersion:'2026-11-18'});
-  try{await sendAuthEmail(email,'Verify your DeftAI email','<div style="font-family:Arial,sans-serif"><h2>Verify your DeftAI email</h2><p>Your code:</p><p style="font-size:30px;font-weight:bold;letter-spacing:8px">'+code+'</p><p>Expires in 15 minutes.</p></div>');}
-  catch(e){await kvSet('pending-signup:'+normalized,null);return res.status(502).json({error:e.message});}
-  res.json({verificationRequired:true,username});
+  const salt=crypto.randomBytes(16).toString('hex'),hash=await scrypt(password,salt);
+  const account={name:username,email,salt,hash,at:Date.now(),legalAcceptedAt:new Date().toISOString(),legalVersion:'2026-11-18'};
+  await kvSet(k,account);await kvSet('email:'+email,normalized);
+  await appendAudit({type:'signup',username,detail:'Account created'});
+  res.json({token:sign(normalized),username});
  }finally{registering.delete(k);}
-}));
-app.post('/api/verify-email',h(async(req,res)=>{
- const username=String(req.body.username||'').trim(),code=String(req.body.code||'').trim(),normalized=username.toLowerCase();
- if(!NAME.test(username)||!(/^\d{6}$/.test(code)))return res.status(400).json({error:'Username aur 6-digit code check karo.'});
- if(recordAttempt(authAttempts,'verify:'+(req.ip||'unknown'),600000)>20)return res.status(429).json({error:'Too many verification attempts.'});
- const p=await kvGet('pending-signup:'+normalized);
- if(!p||p.expiresAt<Date.now())return res.status(400).json({error:'Code expire ho gaya. Signup dobara karo.'});
- if(!crypto.timingSafeEqual(Buffer.from(codeHash(code)),Buffer.from(p.codeHash)))return res.status(400).json({error:'Verification code incorrect hai.'});
- if(await kvGet('u:'+normalized)||await kvGet('email:'+p.email))return res.status(409).json({error:'Username ya email already registered hai.'});
- await kvSet('u:'+normalized,{name:p.name,email:p.email,emailVerifiedAt:new Date().toISOString(),salt:p.salt,hash:p.hash,at:Date.now(),legalAcceptedAt:p.legalAcceptedAt,legalVersion:p.legalVersion});
- await kvSet('email:'+p.email,normalized);await kvSet('pending-signup:'+normalized,null);
- await appendAudit({type:'signup',username:p.name,detail:'Email verified; account created'});
- res.json({token:sign(normalized),username:p.name});
 }));
 app.post('/api/login',h(async(req,res)=>{
  const identifier=String(req.body.username||req.body.identifier||'').trim(),password=String(req.body.password||''),normalized=identifier.toLowerCase(),key=(req.ip||'unknown')+':'+normalized;
  if(recent(failedLogins,key,600000).length>=10)return res.status(429).json({error:'Too many incorrect passwords. Wait 10 minutes.'});
  const username=normalized.includes('@')?await kvGet('email:'+normalized):normalized,u=username?await kvGet('u:'+username):null;
  const bad=()=>{recordAttempt(failedLogins,key,600000);appendAudit({type:'login_failed',username:identifier.slice(0,40),detail:'Invalid credentials'}).catch(()=>{});return res.status(401).json({error:'Username/email ya password galat hai'});};
- if(!u)return bad();
+ if(!u||u.disabled)return bad();
  const a=Buffer.from(await scrypt(password,u.salt)),b=Buffer.from(u.hash);
  if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return bad();
  failedLogins.delete(key);await appendAudit({type:'login_success',username:u.name,detail:'Successful sign-in'});
@@ -466,7 +496,7 @@ app.post('/api/chat', async (req, res) => {
     return { role, content: raw.slice(-cap) };
   });
 
-  const ownerForCredits=who(req),creditState=await userCredits(ownerForCredits);
+  const ownerForCredits=who(req),accountRecord=await kvGet('u:'+ownerForCredits);if(!accountRecord||accountRecord.disabled)return res.status(403).json({error:'This account is disabled.'});const creditState=await userCredits(ownerForCredits);
   if(creditState.balance<1)return res.status(402).json({error:'You are out of credits. Open Plans to request more.'});
   const ctrl = new AbortController();
   res.on('close', () => ctrl.abort());
@@ -504,12 +534,12 @@ app.post('/api/chat', async (req, res) => {
     const unique = [...new Map(combined.filter(x => x.text).map(x => [x.url || x.title, x])).values()].slice(0, 4);
     if (unique.length) {
       send({ sources: unique.map(({ title, url }) => ({ title, url })) });
-      srcText = unique.map((x,i) => `[${i+1}] ${x.title}${x.url ? ' ('+x.url+')' : ''}\\n${String(x.text).slice(0,1200)}`).join('\\n\\n');
+      srcText = unique.map((x,i) => `[${i+1}] ${x.title}${x.url ? ' ('+x.url+')' : ''}\n${String(x.text).slice(0,1200)}`).join('\n\n');
     }
     if (!unique.length && !hasImg) send({ status: 'No matching web pages or knowledge documents found; answering from model knowledge.' });
     const requestedModel=String(req.body.model||settings.model||MODEL);
     const activeModel=(settings.allowedModels||[settings.model||MODEL]).includes(requestedModel)?requestedModel:(settings.model||MODEL);
-    const maxTokens = Math.max(256, Math.min(700, Number(settings.maxCompletionTokens) || 700));
+    const maxTokens = Math.max(256, Math.min(900, Number(settings.maxCompletionTokens) || 700));
     const activeVision = settings.visionModel || activeModel;
     const creativeRequest = /\b(creative|creativity|brainstorm|ideas?|concepts?|design|story|storytelling|poem|joke|funny|original|unique|imagine|invent|script|thumbnail|video idea|content idea)\b/i.test(lastText);
     const r = await groq(
