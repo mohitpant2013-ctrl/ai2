@@ -267,7 +267,7 @@ app.get('/api/admin/live-logs',(req,res)=>{
 app.get('/api/admin/storage', (req,res)=>{
  if(!adminOnly(req,res))return;
  let bytes=0;try{bytes=fs.statSync(FILE).size}catch{}
- let diskMounted=false;try{diskMounted=fs.statSync(DATA_DIR).dev!==fs.statSync('/').dev}catch{}res.json({directory:DATA_DIR,file:FILE,bytes,render:!!process.env.RENDER,persistentMountPathSelected:DATA_DIR==='/var/data',persistentDiskMounted:diskMounted,saveError});
+ let diskMounted=false;try{diskMounted=fs.statSync(DATA_DIR).dev!==fs.statSync('/').dev}catch{}res.json({directory:DATA_DIR,file:FILE,bytes,render:!!process.env.RENDER,dataSource:pool&&databaseReady?'PostgreSQL':diskMounted?'Persistent disk':'Ephemeral filesystem',durableStorage:!!(pool&&databaseReady)||diskMounted,persistentMountPathSelected:DATA_DIR==='/var/data',persistentDiskMounted:diskMounted,databaseReady,saveError});
 });
 app.get('/api/admin/users',h(async(req,res)=>{
  if(!adminOnly(req,res))return;
@@ -420,7 +420,7 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/upgrade', (req, res) => res.sendFile(path.join(__dirname, 'upgrade.html')));
 app.get('/health', (req, res) => {
  let bytes=0,diskMounted=false;try{bytes=fs.statSync(FILE).size;diskMounted=fs.statSync(DATA_DIR).dev!==fs.statSync('/').dev}catch{}
- res.status(saveError?503:200).json({ok:!saveError,storage:saveError?'write-error':diskMounted?'persistent-disk':'ephemeral',diskMounted,bytes,saveError:saveError||null});
+ res.status(saveError?503:200).json({ok:!saveError,storage:saveError?'write-error':pool&&databaseReady?'postgres':diskMounted?'persistent-disk':'ephemeral',durableStorage:!!(pool&&databaseReady)||diskMounted,databaseReady,diskMounted,bytes,saveError:saveError||null});
 });
 
 let st = { t: 0, v: null };
