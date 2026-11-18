@@ -3,6 +3,13 @@ const path = require('path');
 const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '12mb' }));
+app.use((req,res,next)=>{
+ if(req.path.startsWith('/api/')){
+  const started=Date.now();
+  res.on('finish',()=>console.info('[http]',req.method,req.path,res.statusCode,(Date.now()-started)+'ms'));
+ }
+ next();
+});
 
 const KEY = process.env.GROQ_API_KEY;
 const MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
@@ -35,8 +42,10 @@ const SECRET = process.env.TOKEN_SECRET || (KEY || '') + PASS + 'deftai';
 
 // Simple local JSON storage. No Redis or external database required.
 const DATA_DIR=process.env.DATA_DIR||(process.env.RENDER?'/var/data':path.join(__dirname,'data'));
-try{fs.mkdirSync(DATA_DIR,{recursive:true});}catch{}
+try{fs.mkdirSync(DATA_DIR,{recursive:true});}catch(e){console.error('Data directory unavailable:',e.message)}
 const FILE=path.join(DATA_DIR,'deftai-data.json');
+const LEGACY_FILE='/tmp/deftai-data.json';
+try{if(!fs.existsSync(FILE)&&fs.existsSync(LEGACY_FILE))fs.copyFileSync(LEGACY_FILE,FILE)}catch(e){console.error('Legacy data migration failed:',e.message)}
 let mem = {}; try { mem = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
 let saveError='';
 const persist = () => {
@@ -170,7 +179,7 @@ async function makeQuery(history, lastText) {
         { role: 'system', content: 'Decide if live research is genuinely needed. Search only when user explicitly asks to search/check sources, or asks for latest/current/today news, government policy/schemes/official data, or Reddit discussions. For stable general knowledge, explanations, coding, maths, creative work and ordinary chat output exactly NONE. If needed, output only a short English search query. Never request Wikipedia, general blogs or news sites.' },
         { role: 'user', content: ctx }],
       stream: false, temperature: 0, max_completion_tokens: 400
-    }, ['openai/gpt-oss-20b', 'openai/gpt-oss-120b'], AbortSignal.timeout(9000), 'low');
+    }, [MODEL], AbortSignal.timeout(9000), 'low');
     if (r.ok) {
       const q = ((await r.json()).choices?.[0]?.message?.content || '').trim().replace(/^["']|["']$/g, '');
       if (q) return q.toUpperCase() === 'NONE' ? null : q.slice(0, 120);
@@ -206,7 +215,7 @@ const makeAdminToken = () => {
 const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:MODEL,visionModel:VISION,allowedModels:[MODEL,GEMINI_MODEL],reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
 async function getSettings() {
  const saved=await kvGet('settings:global')||{};
- const allowed=(Array.isArray(saved.allowedModels)?saved.allowedModels:DEFAULT_SETTINGS.allowedModels).filter(x=>!String(x).startsWith('openai/'));
+ const allowed=[...new Set([...(Array.isArray(saved.allowedModels)?saved.allowedModels:[]).filter(x=>!String(x).startsWith('openai/')),MODEL,GEMINI_MODEL])];
  const model=String(saved.model||DEFAULT_SETTINGS.model).startsWith('openai/')?DEFAULT_SETTINGS.model:(saved.model||DEFAULT_SETTINGS.model);
  return {...DEFAULT_SETTINGS,...saved,model,allowedModels:allowed.length?allowed:DEFAULT_SETTINGS.allowedModels};
 }
@@ -235,7 +244,7 @@ app.get('/api/admin/live-logs',(req,res)=>{
 app.get('/api/admin/storage', (req,res)=>{
  if(!adminOnly(req,res))return;
  let bytes=0;try{bytes=fs.statSync(FILE).size}catch{}
- res.json({directory:DATA_DIR,file:FILE,bytes,render:!!process.env.RENDER,persistentDiskConfigured:DATA_DIR.startsWith('/var/data'),saveError});
+ res.json({directory:DATA_DIR,file:FILE,bytes,render:!!process.env.RENDER,persistentMountPathSelected:DATA_DIR==='/var/data',saveError});
 });
 app.get('/api/admin/users',h(async(req,res)=>{
  if(!adminOnly(req,res))return;
