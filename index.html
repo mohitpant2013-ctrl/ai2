@@ -84,8 +84,8 @@ textarea{flex:1;background:none;border:none;outline:none;color:var(--tx);font:in
 body{background-color:var(--bg)!important}#main{background:transparent!important}#side{background:var(--panel)!important}#auth{background:var(--bg)!important}
 .logo,.orb,.b::before{background:#171717!important;box-shadow:none!important}
 #main{min-height:0;background:#000!important}#chat{min-height:0;overscroll-behavior:contain}
-#bar{background:#080808;box-shadow:none}#bar:focus-within{border-color:#555;box-shadow:0 0 0 2px #222}
-#send,#stop,.pri{background:#eee;color:#000}.tg.on{color:#fff;border-color:#666;background:#171717}.b a{color:#ddd}
+#bar{background:#080808;box-shadow:none}#bar:focus-within{border-color:var(--ac);box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 18%,transparent)}
+#send,.pri{background:var(--ac);color:#09090b;border-color:var(--ac)}#stop{background:var(--el);color:var(--tx)}.tg.on{color:#fff;border-color:#666;background:#171717}.b a{color:#ddd}
 
 #settingsModal{position:fixed;inset:0;z-index:999;background:#000;display:none;padding:0}
 #settingsModal.open{display:flex}
@@ -182,7 +182,7 @@ body{background-color:var(--bg)!important}#main{background:transparent!important
       <textarea id="inp" rows="1" placeholder="DeftAI se kuch bhi poochho..."></textarea>
       <button id="stop" class="ib" onclick="ctrl&&ctrl.abort()" title="Stop"><i data-i="stop"></i></button>
       <button id="send" class="ib" onclick="send()" title="Send"><i data-i="up"></i></button>
-    </div></div>
+    </div><div id="composerTools"><label for="modelChoice">Model</label><select id="modelChoice" aria-label="Choose AI model"><option value="">Loading models…</option></select><span>Gemini · ChatGPT · DeftAI</span></div></div>
     <div class="fine">DeftAI galti kar sakta hai. Zaroori baatein sources se check karo.</div></div>
 </div>
 
@@ -635,7 +635,7 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{an
 .appearancePreview{position:relative;overflow:hidden;min-height:145px;border:1px solid var(--bd);border-radius:16px;padding:14px;margin:18px 0;background:var(--bg);color:var(--tx);box-shadow:0 12px 36px #0005}.previewTop{font-size:10px;letter-spacing:1.5px;opacity:.7}.previewBubble{margin:18px 0 8px auto;max-width:80%;padding:9px 13px;border-radius:16px;background:var(--hv);border:1px solid var(--bd);font-size:13px}.previewReply{max-width:88%;padding:10px 12px;border-radius:12px;background:var(--el);font-size:12px}.appearancePreview small{display:block;margin-top:12px;opacity:.65}.topAction{border:1px solid var(--bd);background:var(--el);color:var(--tx);border-radius:10px;padding:7px 11px;font-size:12px}.topAction.active{border-color:var(--ac);color:var(--ac)}.focus-mode #side{display:none!important}.focus-mode #main{width:100%}.density-compact .wrap{gap:14px}.density-spacious .wrap{gap:38px}#side,#top{background:var(--panel)}@media(max-width:760px){.topAction{padding:6px 8px;font-size:11px}}.personalSaveRow{display:flex;align-items:center;gap:12px;margin-top:18px;flex-wrap:wrap}.personalSaveRow button:disabled{opacity:.55;cursor:wait}#personalSaveStatus{font-size:12px;color:var(--mu);line-height:1.5}
 #composerTools{display:flex;align-items:center;gap:8px;padding:6px 8px 1px;border-top:1px solid var(--bd);margin-top:6px;color:var(--mu);font-size:11px}
 #composerTools label{font-size:11px;color:var(--mu)}
-#modelChoice{max-width:180px;min-width:118px;background:var(--el);color:var(--tx);border:1px solid var(--bd);border-radius:9px;padding:6px 9px;font:inherit;font-size:12px;outline:none}
+#composerTools{display:flex;align-items:center;gap:8px;padding:6px 8px 1px;border-top:1px solid var(--bd);margin-top:6px;color:var(--mu);font-size:11px}#composerTools label{font-size:11px;color:var(--mu)}#modelChoice{max-width:180px;min-width:118px;background:var(--el);color:var(--tx);border:1px solid var(--bd);border-radius:9px;padding:6px 9px;font:inherit;font-size:12px;outline:none}#modelChoice:focus{border-color:var(--ac);box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 18%,transparent)}#composerTools span{margin-left:auto;opacity:.7}
 #modelChoice:focus{border-color:var(--ac);box-shadow:0 0 0 2px color-mix(in srgb,var(--ac) 18%,transparent)}
 #composerTools span{margin-left:auto;opacity:.7}
 #mode{max-width:110px;min-width:0}
