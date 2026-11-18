@@ -485,7 +485,7 @@ async function go(){
     else{const m=e.message==='AUTH'?'Session expire ho gaya. Dobara sign in karo.':e.message==='RATE'?'Bahut jaldi-jaldi messages. Thodi der rukkar try karo.':
       e.message==='PROVIDER_LIMIT'?'DeftAI ka AI provider abhi usage limit par hai. Alternate models bhi busy hain; thodi der baad try karo.':
       e.message==='PROVIDER_ERROR'?'AI service temporarily unavailable hai. Thodi der baad retry karo.':
-      e.message.startsWith('API:')?'Error: '+e.message.slice(4):e.message.startsWith('Gemini error')?e.message:'Server se connect nahi hua. Render free plan so jata hai, 1 minute baad try karo.';
+      e.message.startsWith('API:')?'Error: '+e.message.slice(4):(e.message.startsWith('Gemini error')||e.message.startsWith('OpenAI'))?e.message:'Server se connect nahi hua. Render free plan so jata hai, 1 minute baad try karo.';
       bd.textContent=m;c.messages.pop()}
   }finally{ctrl=null;$('send').style.display='';$('stop').style.display='none';save();loadStore()}
 }
