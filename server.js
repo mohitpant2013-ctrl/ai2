@@ -299,7 +299,7 @@ app.get('/api/credits/history',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
  res.json({history:(await kvGet('credit-ledger:'+u)||[]).slice(0,30)});
 }));
-app.get('/api/store',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const cfg=await getCommerce(),settings=await getSettings(),credits=await userCredits(u);res.json({plans:(cfg.plans||[]).filter(p=>p.active),contact:cfg.contact,credits,models:settings.allowedModels||[settings.model||MODEL]});}));
+app.get('/api/store',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const cfg=await getCommerce(),settings=await getSettings(),credits=await userCredits(u);res.json({plans:(cfg.plans||[]).filter(p=>p.active),contact:cfg.contact,credits,creditHistory:(await kvGet('credit-ledger:'+u)||[]).slice(0,12),models:settings.allowedModels||[settings.model||MODEL]});}));
 app.post('/api/purchase-request',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const id=String(req.body.planId||''),cfg=await getCommerce(),plan=(cfg.plans||[]).find(p=>p.id===id&&p.active);
  if(!plan)return res.status(404).json({error:'Plan not found or unavailable.'});
