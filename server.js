@@ -218,8 +218,8 @@ const PROVIDER_MODELS=[...(KEY?[MODEL]:[]),...(GEMINI_API_KEY?[GEMINI_MODEL]:[])
 const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL,visionModel:VISION,allowedModels:PROVIDER_MODELS,reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
 async function getSettings() {
  const saved=await kvGet('settings:global')||{};
- const allowed=[...new Set([...(Array.isArray(saved.allowedModels)?saved.allowedModels.filter(x=>!String(x).startsWith('openai/')):[]),...PROVIDER_MODELS])];
- const model=String(saved.model||DEFAULT_SETTINGS.model).startsWith('openai/')?DEFAULT_SETTINGS.model:(saved.model||DEFAULT_SETTINGS.model);
+ const allowed=[...new Set([...(Array.isArray(saved.allowedModels)?saved.allowedModels.filter(x=>!String(x).startsWith('openai/')&&(!String(x).startsWith('gpt-')||OPENAI_API_KEY)&&(!String(x).startsWith('gemini-')||GEMINI_API_KEY)&&(!String(x).startsWith('qwen/')||KEY)):[]),...PROVIDER_MODELS])];
+ const savedModel=String(saved.model||DEFAULT_SETTINGS.model),model=(savedModel.startsWith('gpt-')&&!OPENAI_API_KEY)||(savedModel.startsWith('gemini-')&&!GEMINI_API_KEY)||(savedModel.startsWith('qwen/')&&!KEY)?DEFAULT_SETTINGS.model:savedModel;
  return {...DEFAULT_SETTINGS,...saved,model,allowedModels:allowed.length?allowed:DEFAULT_SETTINGS.allowedModels};
 }
 async function appendAudit(event) {
@@ -393,7 +393,7 @@ app.get('/api/status', async (req, res) => {
     const r = await fetch(G + '/models', { headers: { Authorization: 'Bearer ' + KEY }, signal: AbortSignal.timeout(5000) });
     groqOk = r.ok;
   } catch {}
-  st = { t: Date.now(), v: { server: true, groq: groqOk, gemini:!!GEMINI_API_KEY, model: GEMINI_API_KEY?GEMINI_MODEL:MODEL, vision: VISION, web: false } };
+  st = { t: Date.now(), v: { server: true, groq: groqOk, gemini:!!GEMINI_API_KEY, openai:!!OPENAI_API_KEY, model: GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL, vision: VISION, web: false } };
   res.json(st.v);
 });
 
