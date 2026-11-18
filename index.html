@@ -47,7 +47,7 @@ button:hover{background:var(--hv);border-color:var(--bd2)}button:disabled{opacit
 .src{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
 .src a{font-size:12px;color:var(--mu);border:1px solid var(--bd);padding:3px 11px;border-radius:20px;text-decoration:none;transition:.15s}.src a:hover{color:var(--tx);border-color:var(--ac)}
 .typing i{display:inline-block;width:6px;height:6px;margin:12px 3px 0 0;border-radius:50%;background:var(--mu);animation:bn 1s infinite}
-.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}.image-typing{display:inline-flex;align-items:center;gap:10px;color:var(--mu);font-size:13px;padding:4px 0}.image-spin{display:inline-grid;place-items:center;width:24px;height:24px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;color:var(--ac);font-size:15px;animation:imageSpin .8s linear infinite}@keyframes imageSpin{to{transform:rotate(360deg)}}
 @keyframes bn{50%{transform:translateY(-5px);opacity:.4}}
 .stt{color:var(--mu);margin-left:8px}
 .chip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border-radius:7px;padding:2px 9px;font-size:12px;margin:0 4px 6px 0}.chip .ic{width:13px;height:13px}
@@ -253,6 +253,7 @@ const clean=s=>s.replace(/<think>[\s\S]*?(<\/think>|$)/g,'').trim();
 const md=s=>DOMPurify.sanitize(marked.parse(clean(s)));
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const TYP='<span class="typing"><i></i><i></i><i></i></span>';
+const IMAGE_TYP='<span class="image-typing"><span class="image-spin">✦</span><span>Creating image…</span></span>';
 const SUG=['Mughal empire ka itihaas short mein batao','Chandrayaan-3 ke baare mein batao','Black holes kaise bante hain?','Python mein fibonacci likho'];
 const APPEARANCE_DEFAULTS={bgMode:'solid',bgColor:'#08090d',gradA:'#101426',gradB:'#09090b',textColor:'#f4f4f5',dim:28,panelOpacity:86,blur:14,fontSize:15,chatWidth:760,bubble:'soft',reduceMotion:false};
 function getAppearance(){try{return {...APPEARANCE_DEFAULTS,...JSON.parse(localStorage.getItem('deft_appearance')||'{}'),...(userPrefs.appearance||{})}}catch{return {...APPEARANCE_DEFAULTS,...(userPrefs.appearance||{})}}}
@@ -482,9 +483,10 @@ async function go(){
         return{role:m.role,content:[{type:'text',text:m.content},...m.imgs.map(u=>({type:'image_url',image_url:{url:u}}))]};
       return{role:m.role,content:m.content}});
     const latestUser=String(c.messages.filter(m=>m.role==='user').slice(-1)[0]?.content||'');
-    const wantsImage=/\\b(generate|create|make|draw|design)\\s+(me\\s+)?(an?\\s+)?image\\b|\\b(image|picture|photo)\\s+(bana|banao|create|generate|draw|make)\\b|\\b(tasveer|photo)\\s+(bana|banao)\\b/i.test(latestUser);
+    const wantsImage=/\b(generate|create|make|draw|design)\s+(me\s+)?(an?\s+)?image\b|\b(image|picture|photo)\s+(bana|banao|create|generate|draw|make)\b|\b(tasveer|photo)\s+(bana|banao)\b/i.test(latestUser);
     if(wantsImage){
-      const promptText=latestUser.replace(/\\b(generate|create|make|draw|design)\\s+(me\\s+)?(an?\\s+)?image\\b/i,'').trim()||latestUser;
+      bd.innerHTML=IMAGE_TYP;
+      const promptText=latestUser.replace(/\b(generate|create|make|draw|design)\s+(me\s+)?(an?\s+)?image\b/i,'').trim()||latestUser;
       const ir=await fetch('/api/image',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({prompt:promptText})});
       const ij=await ir.json().catch(()=>({}));
       if(!ir.ok)throw new Error(ij.error||'Image generation failed');
@@ -503,7 +505,7 @@ async function go(){
     paint(bd,full,srcs);scrollChat();c.messages.push({role:'assistant',content:full,sources:srcs});actions(c);
   }catch(e){
     if(e.name==='AbortError'){if(full)c.messages.push({role:'assistant',content:full+' _[stopped]_'});paint(bd,full+' _[stopped]_',srcs)}
-    else{const m=e.message==='AUTH'?'Session expire ho gaya. Dobara sign in karo.':e.message==='RATE'?'Bahut jaldi-jaldi messages. Thodi der rukkar try karo.':
+    else{const m=e.message==='AUTH'?'Session expire ho gaya. Dobara sign in karo.':e.message.includes('This account is disabled')?'Account is disabled by the owner. Open /control → Users and re-enable this account.':e.message==='RATE'?'Bahut jaldi-jaldi messages. Thodi der rukkar try karo.':
       e.message==='PROVIDER_LIMIT'?'DeftAI ka AI provider abhi usage limit par hai. Alternate models bhi busy hain; thodi der baad try karo.':
       e.message==='PROVIDER_ERROR'?'AI service temporarily unavailable hai. Thodi der baad retry karo.':
       e.message.startsWith('API:')?'Error: '+e.message.slice(4):(e.message.startsWith('Gemini error')||e.message.startsWith('OpenAI'))?e.message:'Server se connect nahi hua. Render free plan so jata hai, 1 minute baad try karo.';
