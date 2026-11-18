@@ -345,7 +345,7 @@ function toggleIncognito(){
  if(incognitoMode){normalChatsSnapshot=chats;normalCurSnapshot=cur;chats=[];cur=null;newChat();}
  else{chats=normalChatsSnapshot||[];cur=normalCurSnapshot;normalChatsSnapshot=null;normalCurSnapshot=null;if(!chats.length){newChat()}}
  const b=$('incognitoToggle');if(b){b.classList.toggle('active',incognitoMode);b.setAttribute('aria-pressed',String(incognitoMode));b.textContent=incognitoMode?'◉ Incognito on':'◉ Incognito'}
- if($('privacyStatus'))$('privacyStatus').textContent=incognitoMode?'This chat will not be saved':'DeftAI · Deft-Extra · Groq';
+ if($('privacyStatus'))$('privacyStatus').textContent=incognitoMode?'This chat will not be saved':'DeftAI · Gemini / Deft-Extra · Groq';
  if($('syncStatus'))$('syncStatus').textContent=incognitoMode?'Incognito · not saved':'Normal chat mode';renderList();renderMsgs();$('inp').focus();
 }
 const getChat=()=>chats.find(c=>c.id===cur);
@@ -367,7 +367,7 @@ function addMsg(m){const d=document.createElement('div');
     else if(m.imgs){const s=document.createElement('span');s.className='chip';s.innerHTML=ic('image')+m.imgs+' image';d.appendChild(s);d.appendChild(document.createElement('br'))}
     (m.files||[]).forEach(f=>{const s=document.createElement('span');s.className='chip';s.innerHTML=ic('file');s.append(f);d.appendChild(s)});
     d.appendChild(document.createTextNode(m.shown??m.content))}
-  else{d.className='m b';paint(d,m.content,m.sources)}
+  else{d.className='m b';paint(d,m.content,m.sources);if(m.image){const img=document.createElement('img');img.src=m.image;img.alt='AI generated image';img.style.cssText='display:block;max-width:100%;border-radius:12px;margin-top:10px';d.appendChild(img)}}
   $('msgs').appendChild(d);scrollChat();return d}
 function renderMsgs(){const w=$('msgs');w.innerHTML='';const c=getChat();
   if(!c.messages.length)w.innerHTML='<div id="empty"><div class="orb">'+ic('logo')+'</div><h1>Namaste, '+esc(user)+'</h1><p>Main DeftAI hoon, FyreDeft ka banaya hua. Apne curated knowledge documents se jawab de sakta hoon.</p><div class="sug">'+SUG.map(t=>'<button onclick="ask(this.textContent)">'+t+'</button>').join('')+'</div></div>';
@@ -481,6 +481,18 @@ async function go(){
       if(i===a.length-1&&Array.isArray(m.imgs)&&m.imgs.length)
         return{role:m.role,content:[{type:'text',text:m.content},...m.imgs.map(u=>({type:'image_url',image_url:{url:u}}))]};
       return{role:m.role,content:m.content}});
+    const latestUser=String(c.messages.filter(m=>m.role==='user').slice(-1)[0]?.content||'');
+    const wantsImage=/\\b(generate|create|make|draw|design)\\s+(me\\s+)?(an?\\s+)?image\\b|\\b(image|picture|photo)\\s+(bana|banao|create|generate|draw|make)\\b|\\b(tasveer|photo)\\s+(bana|banao)\\b/i.test(latestUser);
+    if(wantsImage){
+      const promptText=latestUser.replace(/\\b(generate|create|make|draw|design)\\s+(me\\s+)?(an?\\s+)?image\\b/i,'').trim()||latestUser;
+      const ir=await fetch('/api/image',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({prompt:promptText})});
+      const ij=await ir.json().catch(()=>({}));
+      if(!ir.ok)throw new Error(ij.error||'Image generation failed');
+      full='Image generated · '+ij.cost+' credits';
+      bd.textContent=full;
+      const image=document.createElement('img');image.src=ij.image;image.alt='AI generated image';image.style.cssText='display:block;max-width:100%;border-radius:12px;margin-top:10px';bd.appendChild(image);
+      c.messages.push({role:'assistant',content:full,image:ij.image});save();loadStore();return;
+    }
     const r=await fetch('/api/chat',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({messages:msgs,mode:$('mode').value||localStorage.getItem('deft_mode')||'',projectId:activeProjectId,model:$('modelChoice')?.value||''})});
     if(r.status===401){logout();throw new Error('AUTH')};if(r.status===429)throw new Error('RATE');if(!r.ok)throw new Error('API:'+(await r.text()).slice(0,200));
     const rd=r.body.getReader(),dc=new TextDecoder();let buf='';
