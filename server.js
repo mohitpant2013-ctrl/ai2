@@ -15,6 +15,8 @@ const KEY = process.env.GROQ_API_KEY;
 const MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5.4-mini';
 const VISION = process.env.GROQ_VISION_MODEL || MODEL;
 const PASS = process.env.ACCESS_PASSWORD || '';
 const TAVILY = process.env.TAVILY_API_KEY || ''; // optional: full web search
@@ -22,7 +24,7 @@ const FALLBACK = [];
 const G = 'https://api.groq.com/openai/v1';
 const UA = { 'User-Agent': 'DeftAI/1.0 (personal chat app)' };
 const RESEND_API_KEY=process.env.RESEND_API_KEY||'',RESEND_FROM=process.env.RESEND_FROM||'DeftAI <onboarding@resend.dev>';
-const OPENAI_API_KEY=process.env.OPENAI_API_KEY||'';
+
 async function sendAuthEmail(to,subject,html){
  if(!RESEND_API_KEY)throw new Error('Email service is not configured.');
  const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:RESEND_FROM,to:[to],subject,html})});
@@ -212,10 +214,11 @@ const makeAdminToken = () => {
   const b = Buffer.from('admin|' + (Date.now() + 12 * 3600e3)).toString('base64url');
   return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url');
 };
-const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:MODEL,visionModel:VISION,allowedModels:[MODEL,GEMINI_MODEL],reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
+const PROVIDER_MODELS=[MODEL,...(GEMINI_API_KEY?[GEMINI_MODEL]:[]),...(OPENAI_API_KEY?[OPENAI_MODEL,'gpt-5.4']:[])];
+const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:MODEL,visionModel:VISION,allowedModels:PROVIDER_MODELS,reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
 async function getSettings() {
  const saved=await kvGet('settings:global')||{};
- const allowed=[...new Set([...(Array.isArray(saved.allowedModels)?saved.allowedModels:[]).filter(x=>!String(x).startsWith('openai/')),MODEL,GEMINI_MODEL])];
+ const allowed=[...new Set([...(Array.isArray(saved.allowedModels)?saved.allowedModels.filter(x=>!String(x).startsWith('openai/')):[]),...PROVIDER_MODELS])];
  const model=String(saved.model||DEFAULT_SETTINGS.model).startsWith('openai/')?DEFAULT_SETTINGS.model:(saved.model||DEFAULT_SETTINGS.model);
  return {...DEFAULT_SETTINGS,...saved,model,allowedModels:allowed.length?allowed:DEFAULT_SETTINGS.allowedModels};
 }
@@ -277,8 +280,8 @@ app.put('/api/admin/settings', h(async (req, res) => {
   const effort = ['low','medium','high'].includes(body.reasoningEffort) ? body.reasoningEffort : 'medium';
   const max = Math.max(256, Math.min(900, Number(body.maxCompletionTokens) || 700));
   const systemPrompt = String(body.systemPrompt || '').slice(0, 6000);
-  const allowedModels=[...new Set((Array.isArray(body.allowedModels)?body.allowedModels:String(body.allowedModels||'').split(String.fromCharCode(10)).flatMap(x=>x.split(','))).map(x=>String(x).trim()).filter(x=>/^[a-zA-Z0-9._/-]{3,100}$/.test(x)&&!x.startsWith('openai/')))].slice(0,20);
-  const safeModels=allowedModels.length?allowedModels:[model],chosen=safeModels.includes(model)?model:safeModels[0];
+  const allowedModels=[...new Set((Array.isArray(body.allowedModels)?body.allowedModels:String(body.allowedModels||'').split(String.fromCharCode(10)).flatMap(x=>x.split(','))).map(x=>String(x).trim()).filter(x=>/^[a-zA-Z0-9._/-]{3,100}$/.test(x)&&(!x.startsWith('openai/')||OPENAI_API_KEY)&&(!x.startsWith('gemini-')||GEMINI_API_KEY)))].slice(0,20);
+  const safeModels=[...new Set([...allowedModels,...PROVIDER_MODELS])].slice(0,20),chosen=safeModels.includes(model)?model:safeModels[0];
   await kvSet('settings:global', { model:chosen, visionModel:String(body.visionModel||chosen).slice(0,100), allowedModels:safeModels, reasoningEffort:effort, maxCompletionTokens:max, systemPrompt });
   res.json({ ok: true });
 }));
@@ -291,8 +294,9 @@ app.post('/api/purchase-request',h(async(req,res)=>{
  if(!plan)return res.status(404).json({error:'Plan not found or unavailable.'});
  const requests=(await kvGet('purchase:requests'))||[],existing=requests.find(x=>x.username===u&&x.planId===id&&x.status==='pending');
  if(existing)return res.json({ok:true,requestId:existing.id,contact:cfg.contact,alreadyPending:true});
- const request={id:crypto.randomUUID(),username:u,planId:plan.id,planName:plan.name,price:plan.price,credits:plan.credits,status:'pending',createdAt:Date.now()};
- requests.unshift(request);await kvSet('purchase:requests',requests.slice(0,300));await appendAudit({type:'purchase_request',username:u,detail:'Purchase request: '+plan.name});res.json({ok:true,requestId:request.id,contact:cfg.contact});
+ const requestId=crypto.randomUUID(),reference='DFT-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(2).toString('hex').toUpperCase();
+  const request={id:requestId,reference,username:u,planId:plan.id,planName:plan.name,price:plan.price,credits:plan.credits,status:'pending',paymentStatus:'awaiting_manual_review',createdAt:Date.now()};
+ requests.unshift(request);await kvSet('purchase:requests',requests.slice(0,300));await appendAudit({type:'purchase_request',username:u,detail:'Purchase request: '+plan.name});res.json({ok:true,requestId:request.id,reference:request.reference,plan:{name:plan.name,price:plan.price,credits:plan.credits},paymentStatus:request.paymentStatus,contact:cfg.contact});
 }));
 app.get('/api/admin/commerce',h(async(req,res)=>{if(!adminOnly(req,res))return;res.json({commerce:await getCommerce()});}));
 app.put('/api/admin/commerce',h(async(req,res)=>{
@@ -567,13 +571,24 @@ app.post('/api/chat', async (req, res) => {
     }
     if (!unique.length && !hasImg) send({ status: 'No matching web pages or knowledge documents found; answering from model knowledge.' });
     const requestedModel=String(req.body.model||settings.model||MODEL);
-    const activeModel=(settings.allowedModels||[settings.model||MODEL]).includes(requestedModel)?requestedModel:(settings.model||MODEL);
+    const activeModel=(settings.allowedModels||PROVIDER_MODELS).includes(requestedModel)?requestedModel:(settings.model||MODEL);
     const maxTokens = Math.max(256, Math.min(900, Number(settings.maxCompletionTokens) || 700));
     const activeVision = settings.visionModel || activeModel;
     const creativeRequest = /\b(creative|creativity|brainstorm|ideas?|concepts?|design|story|storytelling|poem|joke|funny|original|unique|imagine|invent|script|thumbnail|video idea|content idea)\b/i.test(lastText);
     const promptModel=activeModel.startsWith('gemini-')?activeModel:(hasImg?activeVision:activeModel);
     const systemText=sysPrompt(promptModel, srcText, req.body.mode, [settings.systemPrompt,personalContext,projectContext].filter(Boolean).join('\n'));
     let r;
+    if(activeModel.startsWith('gpt-')){
+      if(!OPENAI_API_KEY){send({error:'PROVIDER_ERROR',message:'OpenAI model selected but OPENAI_API_KEY is missing in Render environment variables.'});return res.end();}
+      const or=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+OPENAI_API_KEY},body:JSON.stringify({model:activeModel,messages:[{role:'system',content:systemText},...history],stream:true,max_completion_tokens:maxTokens})});
+      if(!or.ok){const detail=await or.text();console.error('OpenAI request failed:',or.status,detail.slice(0,350));send({error:'PROVIDER_ERROR',message:'OpenAI request failed (HTTP '+or.status+'). Check API key, model access and billing.'});return res.end();}
+      creditState.balance-=1;creditState.updatedAt=Date.now();await kvSet('credits:'+ownerForCredits,creditState);
+      const decoder=new TextDecoder();let pending='',assistantText='';
+      for await(const chunk of or.body){res.write(chunk);pending+=decoder.decode(chunk,{stream:true});const frames=pending.split(/\r?\n/);pending=frames.pop()||'';for(const line of frames){if(!line.startsWith('data:'))continue;const data=line.slice(5).trim();if(!data||data==='[DONE]')continue;try{const part=JSON.parse(data)?.choices?.[0]?.delta?.content;if(typeof part==='string')assistantText=(assistantText+part).slice(-10000)}catch{}}}
+      const prefs=await getUserPreferences(ownerForCredits);
+      await appendAudit(prefs.auditConsent===true?{type:'chat',username:ownerForCredits,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:assistantText}:{type:'chat_activity',username:ownerForCredits,detail:'Chat request completed; transcript not stored (no consent)'});
+      return res.end();
+    }
     if(activeModel.startsWith('gemini-')){
       if(!GEMINI_API_KEY){send({error:'PROVIDER_ERROR',message:'Gemini is selected but GEMINI_API_KEY is missing in Render environment variables.'});return res.end();}
       const contents=history.map(m=>({role:m.role==='assistant'?'model':'user',parts:Array.isArray(m.content)?m.content.map(p=>{if(p.type==='text')return {text:p.text||''};if(p.type==='image_url'){const raw=p.image_url?.url||'',match=raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);return match?{inlineData:{mimeType:match[1],data:match[2]}}:{text:'[Image omitted: unsupported URL format]'}}return {text:''}}):[{text:String(m.content||'')}]}));
