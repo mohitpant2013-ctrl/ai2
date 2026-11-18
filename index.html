@@ -81,7 +81,7 @@ textarea{flex:1;background:none;border:none;outline:none;color:var(--tx);font:in
 @media(max-width:760px){#side{position:fixed;inset:0 auto 0 0;transform:translateX(-100%);transition:.2s;box-shadow:20px 0 60px rgba(0,0,0,.6)}#side.open{transform:none}#menu{display:inline-flex}.sug{grid-template-columns:1fr}}
 
 :root{--bg:#000;--panel:#050505;--el:#090909;--hv:#111;--bd:rgba(255,255,255,.10);--bd2:rgba(255,255,255,.20);--tx:#f5f5f5;--mu:#929292;--ac:#d8d8d8;--ac2:#777}
-body,#main,#side,#auth,#main{background:#000!important}
+body{background:var(--bg)!important}#main{background:var(--bg)!important}#side{background:var(--panel)!important}#auth{background:var(--bg)!important}
 .logo,.orb,.b::before{background:#171717!important;box-shadow:none!important}
 #main{min-height:0;background:#000!important}#chat{min-height:0;overscroll-behavior:contain}
 #bar{background:#080808;box-shadow:none}#bar:focus-within{border-color:#555;box-shadow:0 0 0 2px #222}
@@ -148,7 +148,7 @@ body,#main,#side,#auth,#main{background:#000!important}
 
 <div id="side">
   <div class="brand"><span class="logo"><i data-i="logo"></i></span><b>DeftAI<small>by FyreDeft</small></b></div>
-  <section id="projectBox" style="margin:10px 0;padding:11px;border:1px solid var(--bd);border-radius:12px">
+  <section id="projectBox" hidden style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:13px">🧠 Project Recall</b><button type="button" class="ib" style="width:auto" onclick="createProject()" title="New project">＋</button></div>
     <select id="projectSelect" aria-label="Active project" style="width:100%;margin-top:9px"><option value="">No project selected</option></select>
     <button type="button" onclick="toggleProjectMemory()" style="width:100%;margin-top:7px">Edit project memory</button>
@@ -159,7 +159,7 @@ body,#main,#side,#auth,#main{background:#000!important}
   <div id="list"></div>
   <button onclick="openSettings()">⚙ Settings & Personalization</button>
   <a href="/upgrade" class="upgrade-link">✦ Upgrade plan <span>↗</span></a>
-  <a href="/control" style="display:flex;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--bd);border-radius:9px;color:var(--mu);text-decoration:none;font-size:14px">⚙ Owner console</a>
+  
   <button onclick="exportChat()"><i data-i="download"></i> Export chat</button>
   <button id="installApp" onclick="installApp()" style="display:none">⬇ Install DeftAI</button>
   <div class="me"><span id="av">?</span><span id="uname"></span><button class="ib" title="Log out" onclick="logout()"><i data-i="logout"></i></button></div>
@@ -167,9 +167,9 @@ body,#main,#side,#auth,#main{background:#000!important}
 
 <div id="main">
   <div id="top"><button id="menu" class="ib" onclick="$('side').classList.toggle('open')"><i data-i="menu"></i></button>
-    <span class="pill"><span class="dot wait" id="dot"></span><span id="stxt">Checking...</span></span>
+    <span class="pill"><span class="dot wait" id="dot"></span><span id="stxt">Checking...</span></span><span id="syncStatus" class="fine" aria-live="polite" style="white-space:nowrap">Saved</span>
     <button onclick="openSettings()" title="Settings">⚙</button>
-    <a href="/upgrade" class="top-upgrade">✦ Upgrade <span id="creditCount">…</span></a><select id="modelChoice" aria-label="AI model" title="AI model"><option value="">Loading models…</option></select><select id="mode" onchange="localStorage.setItem('deft_mode',this.value)"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select></div>
+    <a href="/upgrade" class="top-upgrade">✦ Upgrade <span id="creditCount">…</span></a><select id="modelChoice" aria-label="AI model" title="AI model" style="max-width:165px;min-width:120px"><option value="">Loading models…</option></select><select id="mode" onchange="localStorage.setItem('deft_mode',this.value)"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select></div>
   <div id="chat"><div class="wrap" id="msgs"></div></div>
   <div id="box"><div id="bar">
     <div id="pend"></div>
@@ -255,14 +255,14 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 const TYP='<span class="typing"><i></i><i></i><i></i></span>';
 const SUG=['Mughal empire ka itihaas short mein batao','Chandrayaan-3 ke baare mein batao','Black holes kaise bante hain?','Python mein fibonacci likho'];
 const APPEARANCE_DEFAULTS={bgMode:'solid',bgColor:'#08090d',gradA:'#101426',gradB:'#09090b',textColor:'#f4f4f5',dim:28,panelOpacity:86,blur:14,fontSize:15,chatWidth:760,bubble:'soft',reduceMotion:false};
-function getAppearance(){try{return {...APPEARANCE_DEFAULTS,...(userPrefs.appearance||{}),...JSON.parse(localStorage.getItem('deft_appearance')||'{}')}}catch{return {...APPEARANCE_DEFAULTS,...(userPrefs.appearance||{})}}}
+function getAppearance(){try{return {...APPEARANCE_DEFAULTS,...JSON.parse(localStorage.getItem('deft_appearance')||'{}'),...(userPrefs.appearance||{})}}catch{return {...APPEARANCE_DEFAULTS,...(userPrefs.appearance||{})}}}
 function readAppearanceControls(){return {bgMode:$('prefBgMode').value,bgColor:$('prefBgColor').value,gradA:$('prefGradA').value,gradB:$('prefGradB').value,textColor:$('prefTextColor').value,dim:+$('prefDim').value,panelOpacity:+$('prefPanelOpacity').value,blur:+$('prefBlur').value,fontSize:+$('prefFontSize').value,chatWidth:+$('prefChatWidth').value,bubble:$('prefBubble').value,density:$('prefDensity')?.value||'comfortable',reduceMotion:$('prefReduceMotion').checked}}
 function setAppearanceControls(a){$('prefBgMode').value=a.bgMode;$('prefBgColor').value=a.bgColor;$('prefGradA').value=a.gradA;$('prefGradB').value=a.gradB;$('prefTextColor').value=a.textColor;$('prefDim').value=a.dim;$('prefPanelOpacity').value=a.panelOpacity;$('prefBlur').value=a.blur;$('prefFontSize').value=a.fontSize;$('prefChatWidth').value=a.chatWidth;$('prefBubble').value=a.bubble;if($('prefDensity'))$('prefDensity').value=a.density||'comfortable';$('prefReduceMotion').checked=!!a.reduceMotion;updateAppearanceLabels()}
 function loadAppearanceControls(){setAppearanceControls(getAppearance())}
 function updateAppearanceLabels(){$('fontSizeLabel').textContent=$('prefFontSize').value+' px';$('chatWidthLabel').textContent=$('prefChatWidth').value+' px'}
 function applyAppearance(){const a=getAppearance(),root=document.documentElement.style,alpha=Math.max(.35,Math.min(1,a.panelOpacity/100)),dim=Math.max(0,Math.min(80,a.dim))/100;root.setProperty('--bg',a.bgColor);root.setProperty('--tx',a.textColor);root.setProperty('--panel','rgba(8,9,14,'+alpha+')');root.setProperty('--el','rgba(20,21,29,'+Math.min(1,alpha+.08)+')');root.setProperty('--hv','rgba(35,36,47,'+Math.min(1,alpha+.12)+')');root.setProperty('--panel-blur',a.blur+'px');root.setProperty('--chat-width',a.chatWidth+'px');const wall=localStorage.getItem('deft_wallpaper');let bg='none';if(a.bgMode==='gradient')bg='linear-gradient(135deg,'+a.gradA+','+a.gradB+')';else if(a.bgMode==='image'&&wall)bg='linear-gradient(rgba(0,0,0,'+dim+'),rgba(0,0,0,'+dim+')),url("'+wall+'")';document.body.style.backgroundImage=bg;document.body.style.backgroundColor=a.bgColor;document.body.style.backgroundSize='cover';document.body.style.backgroundPosition='center';document.body.style.backgroundAttachment='fixed';document.body.style.color=a.textColor;document.body.style.fontSize=a.fontSize+'px';document.body.classList.toggle('bubble-round',a.bubble==='round');document.body.classList.toggle('bubble-square',a.bubble==='square');document.body.classList.toggle('bubble-minimal',a.bubble==='minimal');document.body.classList.toggle('reduce-motion',!!a.reduceMotion);document.body.classList.toggle('density-compact',a.density==='compact');document.body.classList.toggle('density-spacious',a.density==='spacious');const p=$('appearancePreview');if(p){p.style.background=bg==='none'?a.bgColor:bg;p.style.color=a.textColor;p.style.backdropFilter='blur('+a.blur+'px)'}}
 function previewAppearance(){const a=readAppearanceControls();try{localStorage.setItem('deft_appearance',JSON.stringify(a))}catch(e){if($('appearanceState'))$('appearanceState').textContent='Browser storage full: preview only'}updateAppearanceLabels();applyAppearance();if($('appearanceState'))$('appearanceState').textContent='Preview active · saved locally'}
-function saveAppearance(){try{const a=readAppearanceControls();localStorage.setItem('deft_appearance',JSON.stringify(a));localStorage.setItem('deft_accent',$('prefAccent').value);userPrefs.appearance=a;userPrefs.accent=$('prefAccent').value;applyAccent();applyAppearance();if($('appearanceState'))$('appearanceState').textContent='Saving appearance to account…';if(token)savePreferences()}catch(e){alert('Could not save appearance: '+e.message)}}
+async function saveAppearance(){try{const a=readAppearanceControls();localStorage.setItem('deft_appearance',JSON.stringify(a));localStorage.setItem('deft_accent',$('prefAccent').value);userPrefs.appearance=a;userPrefs.accent=$('prefAccent').value;applyAccent();applyAppearance();if($('appearanceState'))$('appearanceState').textContent='Saving appearance to account…';if(token){await savePreferences();if($('personalSaveStatus').textContent.startsWith('Saved'))$('appearanceState').textContent='Appearance synced to your account ✓'}}catch(e){if($('appearanceState'))$('appearanceState').textContent='Save failed: '+e.message}}
 function bindAppearanceControls(){['prefBgMode','prefBgColor','prefGradA','prefGradB','prefTextColor','prefDim','prefPanelOpacity','prefBlur','prefFontSize','prefChatWidth','prefBubble','prefDensity','prefReduceMotion','prefAccent'].forEach(id=>{const el=$(id);if(!el||el.dataset.appearanceBound)return;el.dataset.appearanceBound='1';const update=()=>{if(id==='prefAccent'){localStorage.setItem('deft_accent',el.value);applyAccent()}previewAppearance()};el.addEventListener('input',update);el.addEventListener('change',update)});const file=$('wallpaperFile');if(file&&!file.dataset.appearanceBound){file.dataset.appearanceBound='1';file.addEventListener('change',()=>loadWallpaper(file.files?.[0]))}}
 function applyThemePreset(name){const p={aurora:{bgMode:'gradient',gradA:'#101b35',gradB:'#25123a',bgColor:'#08090d',textColor:'#f4f4f5',dim:22,panelOpacity:76,blur:18},ocean:{bgMode:'gradient',gradA:'#06364a',gradB:'#08111e',bgColor:'#07121c',textColor:'#effaff',dim:25,panelOpacity:82,blur:16},forest:{bgMode:'gradient',gradA:'#0c2c1c',gradB:'#10180f',bgColor:'#07110b',textColor:'#effaf1',dim:28,panelOpacity:86,blur:12},sunset:{bgMode:'gradient',gradA:'#4a1d36',gradB:'#1c1838',bgColor:'#160c18',textColor:'#fff4f4',dim:30,panelOpacity:82,blur:16},minimal:{bgMode:'solid',bgColor:'#050505',gradA:'#101010',gradB:'#050505',textColor:'#f4f4f5',dim:0,panelOpacity:98,blur:0}}[name];if(!p)return;setAppearanceControls({...getAppearance(),...p});$('prefAccent').value=name==='ocean'?'cyan':name==='forest'?'green':name==='sunset'?'orange':name==='minimal'?'mono':'violet';localStorage.setItem('deft_accent',$('prefAccent').value);applyAccent();previewAppearance()}
 function resetAppearance(){localStorage.removeItem('deft_wallpaper');localStorage.setItem('deft_appearance',JSON.stringify(APPEARANCE_DEFAULTS));localStorage.setItem('deft_accent','violet');$('prefAccent').value='violet';loadAppearanceControls();applyAccent();applyAppearance();$('wallpaperFile').value='';if($('appearanceState'))$('appearanceState').textContent='Defaults restored'}
@@ -279,9 +279,9 @@ function paint(d,t,src){
 const slim=()=>chats.map(c=>({id:c.id,title:c.title,messages:c.messages.map(m=>({role:m.role,content:m.content,shown:m.shown,files:m.files,imgs:Array.isArray(m.imgs)?m.imgs.length:m.imgs,sources:m.sources}))}));
 const api=(p,o={})=>fetch(p,{...o,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token}});
 let st_t;
-function save(){clearTimeout(st_t);st_t=setTimeout(async()=>{const d=slim();while(JSON.stringify(d).length>900000&&d.length>1)d.pop();
-  try{await api('/api/chats',{method:'PUT',body:JSON.stringify({chats:d})})}catch{}},1200)}
-async function load(){try{const r=await api('/api/chats');if(r.status===401){logout();return false}chats=(await r.json()).chats||[]}catch{chats=[]}
+function save(){clearTimeout(st_t);if($('syncStatus'))$('syncStatus').textContent='Saving…';st_t=setTimeout(async()=>{const d=slim();while(JSON.stringify(d).length>900000&&d.length>1)d.pop();
+  try{const r=await api('/api/chats',{method:'PUT',body:JSON.stringify({chats:d})});if(!r.ok)throw Error('HTTP '+r.status);localStorage.setItem('deft_chats_'+user,JSON.stringify(d));if($('syncStatus'))$('syncStatus').textContent='Saved to account ✓'}catch(e){try{localStorage.setItem('deft_chats_'+user,JSON.stringify(d))}catch{}if($('syncStatus'))$('syncStatus').textContent='Local backup · server retry needed';console.error('Chat sync failed:',e)}},450)}
+async function load(){try{const r=await api('/api/chats');if(r.status===401){logout();return false}if(!r.ok)throw Error('Chat load HTTP '+r.status);chats=(await r.json()).chats||[];if(chats.length)localStorage.setItem('deft_chats_'+user,JSON.stringify(chats))}catch(e){console.error('Chat load failed:',e);try{chats=JSON.parse(localStorage.getItem('deft_chats_'+user))||[]}catch{chats=[]}}
   if(!chats.length){try{chats=JSON.parse(localStorage.getItem('deft_chats_'+user))||[];if(chats.length)save()}catch{}}return true}
 
 let token=localStorage.getItem('deft_token')||'',amode='in';
@@ -556,7 +556,7 @@ async function savePreferences(){
 let storeState={plans:[],contact:{},credits:{balance:0},models:[]};
 async function loadStore(){
  try{const r=await api('/api/store');if(!r.ok)return;storeState=await r.json();$('creditCount').textContent=storeState.credits.balance;$('storeBalance').textContent='Balance: '+storeState.credits.balance+' credits · Plan: '+storeState.credits.plan;
-  const sel=$('modelChoice'),old=sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m;sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;
+  const sel=$('modelChoice'),old=sel.value;sel.replaceChildren();for(const m of storeState.models||[]){const o=document.createElement('option');o.value=m;o.textContent=m.startsWith('gemini-')?'Gemini · '+m.replace('gemini-',''):'DeftAI · '+m;sel.append(o)}if((storeState.models||[]).includes(old))sel.value=old;else if((storeState.models||[]).includes('gemini-3.8-flash'))sel.value='gemini-3.8-flash';
   renderPlans();
  }catch{}
 }
