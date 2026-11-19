@@ -533,7 +533,7 @@ async function go(){
       bd.remove();addMsg(c.messages[c.messages.length-1]);actions(c);save();loadStore();return;
     }
     const r=await fetch('/api/chat',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({messages:msgs,mode:$('mode').value||localStorage.getItem('deft_mode')||'',projectId:activeProjectId,model:$('modelChoice')?.value||''})});
-    if(r.status===401){logout();throw new Error('AUTH')};if(r.status===429)throw new Error('RATE');if(!r.ok)throw new Error('API:'+(await r.text()).slice(0,200));
+    if(r.status===401){logout();throw new Error('AUTH')}if(r.status===429)throw new Error('RATE');if(!r.ok){const ej=await r.json().catch(()=>({}));throw new Error(ej.error==='INSUFFICIENT_CREDITS'?'INSUFFICIENT_CREDITS':ej.message||ej.error||'Request failed')}
     const rd=r.body.getReader(),dc=new TextDecoder();let buf='';
     while(true){const{done,value}=await rd.read();if(done)break;buf+=dc.decode(value,{stream:true});
       const lines=buf.split('\n');buf=lines.pop();
@@ -543,6 +543,7 @@ async function go(){
   }catch(e){
     if(e.name==='AbortError'){if(full)c.messages.push({role:'assistant',content:full+' _[stopped]_'});paint(bd,full+' _[stopped]_',srcs)}
     else{const m=e.message==='AUTH'?'Session expire ho gaya. Dobara sign in karo.':e.message.includes('This account is disabled')?'This account is currently disabled. The owner must review its status and re-enable it before sign-in can continue.':e.message==='RATE'?'Bahut jaldi-jaldi messages. Thodi der rukkar try karo.':
+      e.message==='INSUFFICIENT_CREDITS'?'Credits khatam ho gaye. Plans kholkar balance aur credit options dekho.':
       e.message==='PROVIDER_LIMIT'?'DeftAI ka AI provider abhi usage limit par hai. Alternate models bhi busy hain; thodi der baad try karo.':
       e.message==='PROVIDER_ERROR'?'AI service temporarily unavailable hai. Thodi der baad retry karo.':
       e.message.startsWith('API:')?'Error: '+e.message.slice(4):(e.message.startsWith('Gemini error')||e.message.startsWith('OpenAI'))?e.message:'Server se connect nahi hua. Render free plan so jata hai, 1 minute baad try karo.';
