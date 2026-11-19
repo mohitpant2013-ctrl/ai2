@@ -491,7 +491,10 @@ app.post('/api/image',h(async(req,res)=>{
   try{const parsed=JSON.parse(detail);if(Array.isArray(parsed.errors)&&parsed.errors[0])friendly=String(parsed.errors[0]).slice(0,180);else if(parsed.message)friendly=String(parsed.message).slice(0,180)}catch{}
   return res.status(502).json({error:friendly+' DeftAI credits were refunded.'});
  }
- const bytes=Buffer.from(await r.arrayBuffer());
+ let bytes;
+ try{bytes=Buffer.from(await r.arrayBuffer())}catch(e){await addCredits(u,cost,'Image generation refund · response read failure');console.error('Stability image response read failed:',e.message);return res.status(502).json({error:'Could not read the generated image. DeftAI credits were refunded.'})}
+ const contentType=String(r.headers.get('content-type')||'').toLowerCase();
+ if(contentType&&!contentType.startsWith('image/')){await addCredits(u,cost,'Image generation refund · invalid response type');console.error('Stability returned non-image content:',contentType);return res.status(502).json({error:'Image provider returned an invalid response. DeftAI credits were refunded.'})}
  if(!bytes.length){await addCredits(u,cost,'Image generation refund · empty response');return res.status(502).json({error:'Stability AI returned an empty image. DeftAI credits were refunded.'});}
  const c=await userCredits(u);res.json({ok:true,image:'data:image/jpeg;base64,'+bytes.toString('base64'),credits:c,cost,provider:'Stability AI',model:'Stable Image Core',aspectRatio,style:style||'auto'});
 }));
