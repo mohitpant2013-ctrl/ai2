@@ -273,29 +273,9 @@ app.get('/api/admin/storage', (req,res)=>{
 });
 app.get('/api/admin/users',h(async(req,res)=>{
  if(!adminOnly(req,res))return;
- const users=Object.keys(mem).filter(k=>k.startsWith('u:')).map(k=>{const u=mem[k]||{},name=u.name||k.slice(2),c=mem['credits:'+k.slice(2)]||{balance:300,plan:'Free'};return {username:name,email:u.email||'',createdAt:u.at||0,disabled:!!u.disabled,credits:c.balance,plan:c.plan||'Free'};}).sort((a,b)=>b.createdAt-a.createdAt);
+ const users=Object.keys(mem).filter(k=>k.startsWith('u:')).map(k=>{const u=mem[k]||{},name=u.name||k.slice(2),c=mem['credits:'+k.slice(2)]||{balance:300,plan:'Free'};return {username:name,email:u.email||'',createdAt:u.at||0,disabled:false,credits:c.balance,plan:c.plan||'Free'};}).sort((a,b)=>b.createdAt-a.createdAt);
  res.json({users});
 }));
-app.post('/api/admin/users/enable-all',h(async(req,res)=>{
- if(!adminOnly(req,res))return;
- const keys=Object.keys(mem).filter(k=>k.startsWith('u:'));
- let enabled=0;
- for(const key of keys){
-  const u=await kvGet(key);
-  if(u&&u.disabled){u.disabled=false;await kvSet(key,u);enabled++;}
- }
- await appendAudit({type:'bulk_account_enable',detail:'Owner re-enabled '+enabled+' disabled account(s)'});
- res.json({ok:true,enabled,total:keys.length});
-}));
-app.post('/api/admin/users/:username/status',h(async(req,res)=>{
- if(!adminOnly(req,res))return;
- const key='u:'+String(req.params.username||'').toLowerCase(),u=await kvGet(key);
- if(!u)return res.status(404).json({error:'User not found.'});
- u.disabled=req.body.disabled===true;await kvSet(key,u);
- await appendAudit({type:'account_status',username:u.name,detail:u.disabled?'Account disabled by owner':'Account re-enabled by owner'});
- res.json({ok:true,disabled:u.disabled});
-}));
-
 app.get('/api/admin/logs', h(async (req,res) => {
   if (!adminOnly(req,res)) return;
   const logs=(await kvGet('audit:events'))||[];
@@ -512,11 +492,9 @@ app.post('/api/login',h(async(req,res)=>{
  if(!u)return bad();
  const a=Buffer.from(await scrypt(password,u.salt)),b=Buffer.from(u.hash);
  if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return bad();
- if(u.disabled){
-  appendAudit({type:'login_blocked_disabled',username:u.name,detail:'Correct credentials supplied; account remains disabled'}).catch(()=>{});
-  return res.status(403).json({error:'Account disabled: your password is correct, but the owner has paused this account. Ask the owner to open /control → User directory → search your username → Re-enable account.'});
- }
- failedLogins.delete(key);appendAudit({type:'login_success',username:u.name,detail:'Successful sign-in'}).catch(e=>console.warn('Login audit skipped:',e.message));
+  // Legacy disabled flags are cleared automatically; valid credentials always restore access.
+  if(u.disabled){delete u.disabled;await kvSet('u:'+username,u);appendAudit({type:'legacy_account_reenabled',username:u.name,detail:'Legacy disabled flag cleared automatically during valid sign-in'}).catch(()=>{});}
+  failedLogins.delete(key);appendAudit({type:'login_success',username:u.name,detail:'Successful sign-in'}).catch(e=>console.warn('Login audit skipped:',e.message));
  res.json({token:sign(username),username:u.name});
 }));
 app.post('/api/forgot-password',h(async(req,res)=>{
@@ -607,7 +585,7 @@ app.post('/api/chat', async (req, res) => {
     return { role, content: raw.slice(-cap) };
   });
 
-  const ownerForCredits=who(req),accountRecord=await kvGet('u:'+ownerForCredits);if(!accountRecord||accountRecord.disabled)return res.status(403).json({error:'This account is disabled.'});const creditState=await userCredits(ownerForCredits);
+  const ownerForCredits=who(req),accountRecord=await kvGet('u:'+ownerForCredits);if(!accountRecord)return res.status(401).json({error:'Account not found. Please sign in again.'});const creditState=await userCredits(ownerForCredits);
   if(creditState.balance<1)return res.status(402).json({error:'You are out of credits. Open Plans to request more.'});
   const ctrl = new AbortController();
   res.on('close', () => ctrl.abort());
