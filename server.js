@@ -637,6 +637,62 @@ app.delete('/api/projects/:id',h(async(req,res)=>{
  const projects=(await kvGet('projects:'+u))||[];
  await kvSet('projects:'+u,projects.filter(p=>p.id!==req.params.id));res.json({ok:true});
 }));
+
+/* Deft Community · public profiles, follows and shared text projects */
+const communityNameOk = /^[a-zA-Z0-9_.]{3,20}$/;
+async function communityAccounts(){
+ const names=Object.keys(mem).filter(k=>k.startsWith('u:')).map(k=>k.slice(2));
+ const rows=[];
+ for(const name of names){const account=await kvGet('u:'+name);if(account&&!account.disabled)rows.push({username:account.name||name,joinedAt:account.at||null});}
+ return rows;
+}
+app.get('/api/community',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ await kvSet('community:seen:'+me,Date.now());
+ const [accounts,following,publicProjects]=await Promise.all([communityAccounts(),kvGet('community:follows:'+me),kvGet('community:projects')]);
+ const allFollows=await Promise.all(accounts.map(async a=>[a.username.toLowerCase(),(await kvGet('community:follows:'+a.username.toLowerCase()))||[]]));
+ const followerCounts={};for(const [name,list] of allFollows)followerCounts[name]=list.length;
+ const users=await Promise.all(accounts.map(async a=>({username:a.username,joinedAt:a.joinedAt,followers:followerCounts[a.username.toLowerCase()]||0,following:((following)||[]).includes(a.username.toLowerCase()),active:(Date.now()-(Number(await kvGet('community:seen:'+a.username.toLowerCase()))||0))<5*60*1000})));
+ const projects=(Array.isArray(publicProjects)?publicProjects:[]).filter(p=>p&&p.status==='published').sort((a,b)=>(b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0)).slice(0,100).map(p=>({...p,likes:Array.isArray(p.likes)?p.likes.length:0,liked:(p.likes||[]).includes(me)}));
+ res.json({me,users:users.sort((a,b)=>Number(b.active)-Number(a.active)||b.followers-a.followers),projects,following:(following||[]).length});
+}));
+app.post('/api/community/follow/:username',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const target=String(req.params.username||'').toLowerCase();if(!communityNameOk.test(target))return res.status(400).json({error:'Invalid username'});
+ if(target===me)return res.status(400).json({error:'You cannot follow yourself.'});
+ const account=await kvGet('u:'+target);if(!account||account.disabled)return res.status(404).json({error:'User not found'});
+ const list=(await kvGet('community:follows:'+me)||[]).filter(x=>typeof x==='string');
+ const index=list.indexOf(target),following=index<0;if(following)list.push(target);else list.splice(index,1);
+ await kvSet('community:follows:'+me,list.slice(0,1000));
+ res.json({ok:true,following,followingCount:list.length});
+}));
+app.post('/api/community/projects',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const title=String(req.body.title||'').trim().slice(0,80),description=String(req.body.description||'').trim().slice(0,240),details=String(req.body.details||'').trim().slice(0,8000);
+ if(title.length<3||description.length<10||details.length<10)return res.status(400).json({error:'Add a title, a short description and project details (at least 10 characters each for description/details).'});
+ const all=await communityAccounts();const own=(await kvGet('community:projects')||[]).filter(p=>p.author.toLowerCase()===me&&p.status==='published');
+ if(own.length>=10)return res.status(400).json({error:'Maximum 10 published projects per account.'});
+ const project={id:crypto.randomUUID(),title,description,details,author:me,likes:[],status:'published',createdAt:Date.now(),updatedAt:Date.now()};
+ const list=await kvGet('community:projects')||[];list.unshift(project);await kvSet('community:projects',list.slice(0,1000));
+ res.status(201).json({ok:true,project:{...project,likes:0,liked:false}});
+}));
+app.post('/api/community/projects/:id/like',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const list=await kvGet('community:projects')||[],idx=list.findIndex(p=>p.id===req.params.id&&p.status==='published');
+ if(idx<0)return res.status(404).json({error:'Project not found'});
+ const p=list[idx],likes=Array.isArray(p.likes)?p.likes:[],at=likes.indexOf(me),liked=at<0;
+ if(liked)likes.push(me);else likes.splice(at,1);
+ list[idx]={...p,likes:likes.slice(0,10000),updatedAt:Date.now()};await kvSet('community:projects',list);
+ res.json({ok:true,liked,likes:list[idx].likes.length});
+}));
+app.delete('/api/community/projects/:id',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const list=await kvGet('community:projects')||[],p=list.find(x=>x.id===req.params.id);
+ if(!p)return res.status(404).json({error:'Project not found'});
+ if(p.author.toLowerCase()!==me)return res.status(403).json({error:'Only the project owner can remove this project.'});
+ await kvSet('community:projects',list.filter(x=>x.id!==req.params.id));res.json({ok:true});
+}));
+
 app.get('/api/chats', h(async (req, res) => {
   const u = who(req); if (!u) return res.status(401).json({ error: 'Login karo' });
   res.json({ chats: (await kvGet('c:' + u)) || [] });
