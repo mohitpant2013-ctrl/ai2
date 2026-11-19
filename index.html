@@ -528,10 +528,9 @@ async function go(){
       const ir=await fetch('/api/image',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({prompt:promptText})});
       const ij=await ir.json().catch(()=>({}));
       if(!ir.ok)throw new Error(ij.error||'Image generation failed');
-      full='Image generated · '+ij.cost+' credits';
-      bd.textContent=full;
-      const image=document.createElement('img');image.src=ij.image;image.alt='AI generated image';image.style.cssText='display:block;max-width:100%;border-radius:12px;margin-top:10px';bd.appendChild(image);
-      c.messages.push({role:'assistant',content:full,image:ij.image});save();loadStore();return;
+      full='Image created · '+ij.cost+' credits';
+      c.messages.push({role:'assistant',content:full,image:ij.image});
+      bd.remove();addMsg(c.messages[c.messages.length-1]);actions(c);save();loadStore();return;
     }
     const r=await fetch('/api/chat',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({messages:msgs,mode:$('mode').value||localStorage.getItem('deft_mode')||'',projectId:activeProjectId,model:$('modelChoice')?.value||''})});
     if(r.status===401){logout();throw new Error('AUTH')};if(r.status===429)throw new Error('RATE');if(!r.ok)throw new Error('API:'+(await r.text()).slice(0,200));
