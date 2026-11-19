@@ -676,6 +676,17 @@ app.post('/api/community/projects',h(async(req,res)=>{
  const list=await kvGet('community:projects')||[];list.unshift(project);await kvSet('community:projects',list.slice(0,1000));
  res.status(201).json({ok:true,project:{...project,likes:0,liked:false}});
 }));
+app.post('/api/community/publish/:id',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const own=await kvGet('projects:'+me)||[],source=own.find(p=>p.id===req.params.id);
+ if(!source)return res.status(404).json({error:'Your private project was not found.'});
+ const details=String(source.memory||'').trim();if(details.length<10)return res.status(400).json({error:'Add at least 10 characters of project memory before publishing.'});
+ const list=await kvGet('community:projects')||[];
+ if(list.some(p=>p.author.toLowerCase()===me&&p.sourceProjectId===source.id&&p.status==='published'))return res.status(409).json({error:'This project is already published.'});
+ if(list.filter(p=>p.author.toLowerCase()===me&&p.status==='published').length>=10)return res.status(400).json({error:'Maximum 10 published projects per account.'});
+ const p={id:crypto.randomUUID(),sourceProjectId:source.id,title:String(source.name||'Untitled project').slice(0,80),description:details.slice(0,240),details,author:me,likes:[],status:'published',createdAt:Date.now(),updatedAt:Date.now()};
+ list.unshift(p);await kvSet('community:projects',list.slice(0,1000));res.status(201).json({ok:true,project:{...p,likes:0,liked:false}});
+}));
 app.post('/api/community/projects/:id/like',h(async(req,res)=>{
  const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
  const list=await kvGet('community:projects')||[],idx=list.findIndex(p=>p.id===req.params.id&&p.status==='published');
