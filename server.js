@@ -509,9 +509,13 @@ app.post('/api/login',h(async(req,res)=>{
  if(recent(failedLogins,key,600000).length>=10)return res.status(429).json({error:'Too many incorrect passwords. Wait 10 minutes.'});
  const username=normalized.includes('@')?await kvGet('email:'+normalized):normalized,u=username?await kvGet('u:'+username):null;
  const bad=()=>{recordAttempt(failedLogins,key,600000);appendAudit({type:'login_failed',username:identifier.slice(0,40),detail:'Invalid credentials'}).catch(()=>{});return res.status(401).json({error:'Username/email ya password galat hai'});};
- if(!u||u.disabled)return bad();
+ if(!u)return bad();
  const a=Buffer.from(await scrypt(password,u.salt)),b=Buffer.from(u.hash);
  if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return bad();
+ if(u.disabled){
+  appendAudit({type:'login_blocked_disabled',username:u.name,detail:'Correct credentials supplied; account remains disabled'}).catch(()=>{});
+  return res.status(403).json({error:'Account disabled: your password is correct, but the owner has paused this account. Ask the owner to open /control → User directory → search your username → Re-enable account.'});
+ }
  failedLogins.delete(key);appendAudit({type:'login_success',username:u.name,detail:'Successful sign-in'}).catch(e=>console.warn('Login audit skipped:',e.message));
  res.json({token:sign(username),username:u.name});
 }));
