@@ -719,7 +719,7 @@ app.post('/api/chat', async (req, res) => {
     res.end();
   } catch (e) {
     try { await refundChatCredit('Chat refund · request interrupted or failed'); } catch(refundError) { console.error('Credit refund failed:',refundError.message); }
-    try { send({ error: String(e).slice(0, 200) }); } catch {}
+    try { if(e.message==='INSUFFICIENT_CREDITS')send({error:'INSUFFICIENT_CREDITS',message:'You are out of credits. Open Plans to check your balance.'});else send({ error: String(e).slice(0, 200) }); } catch {}
     res.end();
   }
 });
