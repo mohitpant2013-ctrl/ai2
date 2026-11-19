@@ -84,17 +84,37 @@ const persist = (state=mem) => {
     console.error('Persistent data save failed:',e.message);
   }
 };
-async function kvGet(k) { return mem[k] ?? null; }
-async function kvSet(k, v) {
-  if(pool){await pool.query('INSERT INTO deftai_kv (key,value) VALUES ($1,$2::jsonb) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value',[k,JSON.stringify(v)]);mem[k]=v;return;}
-  const next={...mem,[k]:v};persist(next);if(saveError)throw new Error('Storage write failed: '+saveError);mem=next;
+const D1_API_URL=String(process.env.D1_API_URL||'').replace(/\/$/,'');
+const D1_API_SECRET=process.env.D1_API_SECRET||'';
+async function d1Request(action,payload={}){
+ if(!D1_API_URL||!D1_API_SECRET)throw new Error('Cloudflare D1 is not configured. Set D1_API_URL and D1_API_SECRET in Render.');
+ const response=await fetch(D1_API_URL+'/kv/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-DeftAI-Secret':D1_API_SECRET},body:JSON.stringify(payload),signal:AbortSignal.timeout(12000)});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok||data.ok===false)throw new Error(data.error||'Cloudflare D1 request failed ('+response.status+').');
+ return data;
+}
+async function kvGet(k){
+ if(D1_API_URL&&D1_API_SECRET){const data=await d1Request('get',{key:k});if(data.found){mem[k]=data.value;return data.value}delete mem[k];return null;}
+ return mem[k]??null;
+}
+async function kvSet(k,v){
+ if(D1_API_URL&&D1_API_SECRET){await d1Request('set',{key:k,value:v});mem[k]=v;return;}
+ if(pool){await pool.query('INSERT INTO deftai_kv (key,value) VALUES ($1,$2::jsonb) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value',[k,JSON.stringify(v)]);mem[k]=v;return;}
+ const next={...mem,[k]:v};persist(next);if(saveError)throw new Error('Storage write failed: '+saveError);mem=next;
 }
 async function kvDelete(k){
-  if(pool)await pool.query('DELETE FROM deftai_kv WHERE key=$1',[k]);
-  const next={...mem};delete next[k];if(!pool){persist(next);if(saveError)throw new Error('Storage delete failed: '+saveError)}mem=next;
+ if(D1_API_URL&&D1_API_SECRET){await d1Request('delete',{key:k});delete mem[k];return;}
+ if(pool)await pool.query('DELETE FROM deftai_kv WHERE key=$1',[k]);
+ const next={...mem};delete next[k];if(!pool){persist(next);if(saveError)throw new Error('Storage delete failed: '+saveError)}mem=next;
 }
 function diskMounted(){try{return fs.statSync(DATA_DIR).dev!==fs.statSync('/').dev}catch{return false}}
 async function initStore(){
+ if(D1_API_URL&&D1_API_SECRET){
+  const entries=Object.entries(mem);
+  for(let i=0;i<entries.length;i+=25)await d1Request('import',{entries:entries.slice(i,i+25)});
+  const result=await d1Request('all');mem=result.entries||{};databaseReady=true;
+  console.info('[storage] Cloudflare D1 ready · '+Object.keys(mem).length+' keys loaded');return;
+ }
  if(!pool)return;
  await pool.query('CREATE TABLE IF NOT EXISTS deftai_kv (key TEXT PRIMARY KEY,value JSONB NOT NULL,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
  for(const [key,value] of Object.entries(mem))await pool.query('INSERT INTO deftai_kv (key,value) VALUES ($1,$2::jsonb) ON CONFLICT (key) DO NOTHING',[key,JSON.stringify(value)]);
@@ -912,4 +932,4 @@ app.use((err,req,res,next)=>{
  console.error('[request-error]',req.requestId||'-',err?.message||'Unknown error');
  res.status(500).json({error:'Internal server error.',requestId:req.requestId||null});
 });
-initStore().then(()=>{app.listen(process.env.PORT||3000,()=>console.log('DeftAI running · '+(pool?'PostgreSQL':diskMounted()?'persistent disk':'ephemeral storage')))}).catch(e=>{console.error('Database initialization failed:',e.message);process.exit(1)});
+initStore().then(()=>{app.listen(process.env.PORT||3000,()=>console.log('DeftAI running · '+(D1_API_URL&&D1_API_SECRET?'Cloudflare D1':pool?'PostgreSQL':diskMounted()?'persistent disk':'ephemeral storage')))}).catch(e=>{console.error('Database initialization failed:',e.message);process.exit(1)});
