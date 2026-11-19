@@ -646,6 +646,10 @@ async function communityAccounts(){
  for(const name of names){const account=await kvGet('u:'+name);if(account&&!account.disabled)rows.push({username:account.name||name,joinedAt:account.at||null});}
  return rows;
 }
+app.post('/api/community/presence',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ await kvSet('community:seen:'+me,Date.now());res.json({ok:true});
+}));
 app.get('/api/community',h(async(req,res)=>{
  const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
  await kvSet('community:seen:'+me,Date.now());
