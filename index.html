@@ -129,6 +129,40 @@ body{background-color:var(--bg)!important}#main{background:transparent!important
 
 @media(max-width:700px){#top{gap:6px}.top-upgrade{padding:7px 9px;font-size:12px}}
 
+/* DeftAI Online · refreshed interface */
+:root{--bg:#0b0d14;--panel:#111521;--el:#171d2b;--hv:#20283a;--bd:rgba(181,194,255,.12);--bd2:rgba(181,194,255,.24);--tx:#f3f5ff;--mu:#9aa4bd;--ac:#a78bfa;--ac2:#67e8d1}
+body{background:radial-gradient(ellipse at 72% -15%,rgba(124,92,255,.18),transparent 38%),radial-gradient(ellipse at 0% 100%,rgba(44,196,180,.08),transparent 35%),var(--bg);color:var(--tx)}
+#side{background:rgba(14,18,29,.94)!important;border-right:1px solid var(--bd);backdrop-filter:blur(22px);padding:18px 14px;gap:14px}
+.brand{padding:5px 7px 12px}.logo,.orb,.b::before{background:linear-gradient(140deg,#8b5cf6,#36cfc0)!important;box-shadow:0 8px 28px rgba(139,92,246,.24)!important}
+.brand b{letter-spacing:-.5px}.brand small{color:#99a4be}
+#new{background:linear-gradient(110deg,rgba(139,92,246,.18),rgba(54,207,192,.08));border:1px solid rgba(167,139,250,.32);border-radius:13px;padding:12px}
+#chatSearch{background:#0b101b;border:1px solid var(--bd);border-radius:11px;color:var(--tx);padding:11px 12px;outline:none}
+#list{gap:4px;padding:4px 0}.ci{border-radius:10px;padding:10px 12px}.ci.on{background:rgba(167,139,250,.13);border:1px solid rgba(167,139,250,.16)}
+#side>button:not(#new){border-radius:11px;text-align:left;justify-content:flex-start}
+.upgrade-link,.top-upgrade{background:linear-gradient(110deg,rgba(139,92,246,.19),rgba(54,207,192,.1));border:1px solid rgba(167,139,250,.3);color:#e4ddff;border-radius:12px}
+#main{background:transparent!important}#top{min-height:62px;padding:12px 22px;border-bottom:1px solid rgba(181,194,255,.07);background:rgba(11,13,20,.56);backdrop-filter:blur(18px)}
+#top>button{border-radius:11px;background:rgba(255,255,255,.035)}.pill{background:rgba(17,21,33,.8);border-color:var(--bd);color:#bdc6dc}
+#mode,#modelChoice{background:#151b29;color:var(--tx);border:1px solid var(--bd);border-radius:10px}
+#chat{padding:28px 22px 30px;scroll-behavior:smooth}.wrap{max-width:850px;gap:30px}
+.u{background:linear-gradient(135deg,rgba(139,92,246,.2),rgba(72,119,166,.12));border:1px solid rgba(167,139,250,.18);border-radius:19px 19px 6px 19px;padding:12px 16px;box-shadow:0 8px 28px rgba(0,0,0,.12)}
+.b{padding-left:44px;line-height:1.75}.b::before{width:32px;height:32px;border-radius:11px}.b pre{background:#090d16;border:1px solid var(--bd);border-radius:14px}.b code{background:#20283a}.b a{color:#8fe8dc}
+#empty{max-width:720px;margin:12vh auto 0;padding:0 14px}#empty h1{font-size:clamp(28px,4vw,38px);letter-spacing:-1.1px;background:linear-gradient(100deg,#fff,#c4b5fd 55%,#82e6d9);color:transparent;background-clip:text}#empty p{color:#aab4cb;font-size:15px}
+.orb{width:62px;height:62px;border-radius:20px}.sug{gap:12px;margin-top:34px}.sug button{background:rgba(20,26,41,.8);border:1px solid var(--bd);border-radius:15px;padding:15px 17px;transition:.2s}.sug button:hover{border-color:rgba(167,139,250,.5);transform:translateY(-2px);background:rgba(33,40,61,.9)}
+#box{padding:0 20px max(14px,env(safe-area-inset-bottom))}#bar{max-width:850px;background:rgba(17,22,35,.94);border:1px solid rgba(181,194,255,.2);border-radius:23px;padding:11px 13px;box-shadow:0 16px 55px rgba(0,0,0,.3);backdrop-filter:blur(20px)}#bar:focus-within{border-color:rgba(167,139,250,.62);box-shadow:0 0 0 4px rgba(167,139,250,.1),0 16px 55px rgba(0,0,0,.3)}
+#row{gap:6px}#row>button{border-radius:11px}#row textarea{min-height:44px;padding:10px 8px;line-height:1.55}#send,.pri{background:linear-gradient(135deg,#b49aff,#6ee7d3);color:#101321;border:0;border-radius:12px;font-weight:750}#send:hover,.pri:hover{filter:brightness(1.08)}#stop{background:#283148;color:#fff}
+#composerTools{border-top:1px solid rgba(181,194,255,.09);margin-top:7px;padding:9px 5px 0;color:#8e9bb6}
+#auth{background:radial-gradient(ellipse at 50% 0,rgba(139,92,246,.2),transparent 45%),var(--bg)!important}.card{background:rgba(17,22,35,.96);border:1px solid var(--bd2);border-radius:24px;box-shadow:0 28px 100px rgba(0,0,0,.48)}.card input{background:#0b101b;border:1px solid var(--bd)}
+#settingsModal{background:rgba(4,7,14,.78);backdrop-filter:blur(16px)}#settingsCard{background:#101522;border-color:var(--bd2);border-radius:20px}.settingsNav{background:#0c111c;border-color:var(--bd)}.settingNavItem:hover,.settingNavItem.on{background:#22243a;color:#fff}.settingsContent,.setPane{color:var(--tx)}.settingChoice{background:#121a29;border-color:var(--bd);border-radius:14px}.setPane input,.setPane textarea,.setPane select{background:#0b101b;border-color:var(--bd)}
+.image-tool{color:#b8a5ff!important}.image-tool:hover{background:rgba(167,139,250,.13)!important}
+.generated-image-card{margin-top:13px;max-width:min(100%,720px);overflow:hidden;border:1px solid var(--bd);border-radius:17px;background:#0c1220}.generated-image-card img{display:block;width:100%;height:auto;max-height:650px;object-fit:contain;background:#080b12}.image-download{display:inline-flex;margin:10px 12px 12px;padding:8px 12px;border:1px solid var(--bd);border-radius:10px;color:#dcd4ff;text-decoration:none;font-size:13px}.image-download:hover{background:#20283a}
+.image-studio{display:none;position:fixed;inset:0;z-index:1100;align-items:center;justify-content:center;padding:18px;background:rgba(3,5,12,.78);backdrop-filter:blur(18px)}.image-studio.open{display:flex}.image-studio-card{width:min(650px,100%);padding:25px;border-radius:23px;border:1px solid rgba(181,194,255,.22);background:linear-gradient(145deg,#171d2c,#0e1420);box-shadow:0 30px 100px #000a;animation:up .22s ease}
+.studio-head{display:flex;align-items:center;gap:13px;margin-bottom:25px}.studio-mark{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(135deg,#8b5cf6,#42cdbb);color:#07121b}.studio-mark .ic{width:22px;height:22px}.studio-head h2{font-size:21px;margin:0;letter-spacing:-.5px}.studio-head p{margin:3px 0 0;color:#9da9c1;font-size:13px}.studio-close{margin-left:auto;align-self:flex-start}
+.studio-label{display:block;font-size:13px;font-weight:650;margin:0 0 8px;color:#d8def0}#imagePrompt{display:block;width:100%;min-height:142px;resize:vertical;padding:14px;border-radius:14px;border:1px solid rgba(181,194,255,.18);background:#090f1b;color:#f3f5ff;font:14px/1.65 Inter,system-ui;outline:none}#imagePrompt:focus{border-color:#a78bfa;box-shadow:0 0 0 3px rgba(167,139,250,.12)}
+.studio-examples{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:12px 0 20px;color:#8d9ab3;font-size:12px}.studio-examples button{font-size:11px;padding:6px 9px;border-radius:20px;background:#192235;color:#cbd4e8}
+.studio-foot{display:flex;justify-content:space-between;align-items:center;gap:14px;border-top:1px solid var(--bd);padding-top:16px}.studio-foot>div:first-child b,.studio-foot>div:first-child small{display:block}.studio-foot b{font-size:13px}.studio-foot small{font-size:11px;color:#8996af;margin-top:3px}.studio-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.studio-actions #imageStudioStatus{font-size:11px;color:#a5b1c8}.studio-generate{background:linear-gradient(135deg,#b49aff,#6ee7d3);color:#101321;border:0;font-weight:750}.studio-progress{display:block;color:#9ca9c2;font-size:12px;margin-top:5px}
+@media(max-width:760px){#side{background:#0d1320!important}#top{padding:8px 10px;min-height:56px}#chat{padding:18px 12px 24px}.wrap{gap:23px}#box{padding:0 8px max(9px,env(safe-area-inset-bottom))}#bar{border-radius:20px;padding:8px}#empty{margin:9vh auto 0}#empty h1{font-size:26px}.image-studio{padding:10px;align-items:flex-end}.image-studio-card{padding:19px 16px;border-radius:22px 22px 14px 14px}.studio-foot{align-items:flex-start;flex-direction:column}.studio-actions{width:100%;justify-content:space-between}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs><symbol id="i-logo" viewBox="0 0 24 24"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3-1-4-1-7 1-10z"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol><symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol><symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol><symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol><symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol><symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol><symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></symbol><symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol><symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M16 8l4 4-4 4M20 12H9"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol><symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol><symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5"/></symbol><symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m21 16-5-5-9 9"/></symbol></defs></svg>
 <div id="auth"><div class="card">
@@ -175,7 +209,7 @@ body{background-color:var(--bg)!important}#main{background:transparent!important
     <div id="row">
       <button class="ib" onclick="$('file').click()" title="Image / file"><i data-i="clip"></i></button>
       
-      <button class="ib" onclick="generateImage()" title="Generate image (20 credits)">🎨</button>
+      <button class="ib image-tool" onclick="openImageStudio()" title="Create an image · 20 credits"><i data-i="image"></i></button>
       <button id="mic" class="ib" onclick="mic()" title="Bol ke poochho"><i data-i="mic"></i></button>
       <input type="file" id="file" multiple hidden accept="image/*,.txt,.md,.csv,.json,.js,.py,.html,.css,.java,.c,.cpp,.xml,.log,.pdf">
       <textarea id="inp" rows="1" placeholder="DeftAI se kuch bhi poochho..."></textarea>
@@ -187,6 +221,15 @@ body{background-color:var(--bg)!important}#main{background:transparent!important
 
 
 <div id="plansModal" style="display:none;position:fixed;inset:0;z-index:100;background:#000c;overflow:auto;padding:20px"><section style="max-width:760px;margin:5vh auto;background:var(--panel);border:1px solid var(--bd);border-radius:18px;padding:22px"><div style="display:flex;justify-content:space-between;align-items:center"><h2>DeftAI Plans</h2><button onclick="closePlans()">✕</button></div><p id="storeBalance"></p><div id="planCards"></div><p id="purchaseInfo" style="white-space:pre-wrap"></p><small>Free starts with 300 credits. Paid prices are monthly; credits and renewals are applied manually after owner approval. No automatic billing. 1 credit per successful chat request.</small></section></div>
+<div id="imageStudio" class="image-studio" role="dialog" aria-modal="true" aria-labelledby="imageStudioTitle">
+ <section class="image-studio-card">
+  <div class="studio-head"><div class="studio-mark"><i data-i="image"></i></div><div><h2 id="imageStudioTitle">Create an image</h2><p>Describe the scene. DeftAI will turn your prompt into artwork.</p></div><button class="ib studio-close" onclick="closeImageStudio()" aria-label="Close image creator">✕</button></div>
+  <label class="studio-label" for="imagePrompt">Your prompt</label>
+  <textarea id="imagePrompt" maxlength="1800" placeholder="A cinematic Minecraft castle floating above the clouds at sunset, detailed voxel art…"></textarea>
+  <div class="studio-examples"><span>Try:</span><button type="button" onclick="setImagePrompt('A cinematic Minecraft PvP arena at sunset, detailed voxel art')">Minecraft scene</button><button type="button" onclick="setImagePrompt('A cozy futuristic gaming desk with soft purple lighting, concept art')">Gaming setup</button><button type="button" onclick="setImagePrompt('A tiny fantasy village inside a glass bottle, whimsical digital illustration')">Fantasy art</button></div>
+  <div class="studio-foot"><div><b>20 credits</b><small>Powered by Cloudflare FLUX Schnell · beta</small></div><div class="studio-actions"><span id="imageStudioStatus" role="status"></span><button type="button" onclick="closeImageStudio()">Cancel</button><button type="button" class="studio-generate" id="imageGenerateBtn" onclick="runImageGeneration()">✦ Generate</button></div></div>
+ </section>
+</div>
 <div id="settingsModal">
 <section id="settingsCard" role="dialog" aria-modal="true" aria-label="Settings">
 <aside class="settingsNav">
@@ -367,7 +410,7 @@ function addMsg(m){const d=document.createElement('div');
     else if(m.imgs){const s=document.createElement('span');s.className='chip';s.innerHTML=ic('image')+m.imgs+' image';d.appendChild(s);d.appendChild(document.createElement('br'))}
     (m.files||[]).forEach(f=>{const s=document.createElement('span');s.className='chip';s.innerHTML=ic('file');s.append(f);d.appendChild(s)});
     d.appendChild(document.createTextNode(m.shown??m.content))}
-  else{d.className='m b';paint(d,m.content,m.sources);if(m.image){const img=document.createElement('img');img.src=m.image;img.alt='AI generated image';img.style.cssText='display:block;max-width:100%;border-radius:12px;margin-top:10px';d.appendChild(img)}}
+  else{d.className='m b';paint(d,m.content,m.sources);if(m.image){const card=document.createElement('div');card.className='generated-image-card';const img=document.createElement('img');img.src=m.image;img.alt='AI-generated artwork';img.loading='lazy';card.appendChild(img);const dl=document.createElement('a');dl.className='image-download';dl.href=m.image;dl.download='deftai-artwork.png';dl.textContent='↓ Save image';card.appendChild(dl);d.appendChild(card)}}
   $('msgs').appendChild(d);scrollChat();return d}
 function renderMsgs(){const w=$('msgs');w.innerHTML='';const c=getChat();
   if(!c.messages.length)w.innerHTML='<div id="empty"><div class="orb">'+ic('logo')+'</div><h1>Namaste, '+esc(user)+'</h1><p>Main DeftAI hoon, FyreDeft ka banaya hua. Apne curated knowledge documents se jawab de sakta hoon.</p><div class="sug">'+SUG.map(t=>'<button onclick="ask(this.textContent)">'+t+'</button>').join('')+'</div></div>';
@@ -596,17 +639,32 @@ async function requestPlan(id){
   const c=j.contact||{},p=j.plan||{};$('purchaseInfo').textContent=(j.alreadyPending?'You already have a pending request.\n':'Request created.\n')+'Reference: '+(j.reference||j.requestId)+'\nPlan: '+(p.name||id)+' · '+(p.price||'')+' · '+(p.credits||'')+' credits\nStatus: Awaiting manual review\n\n'+(c.message||'')+'\nContact: '+(c.discord||'Not set')+' · '+(c.phone||'Not set')+'\n\nDo not send money until the owner and a parent/guardian confirm the payment details. Credits appear only after approval.';
  }catch(e){$('purchaseInfo').textContent=e.message}
 }
-async function generateImage(){
- const typed=$('inp')?.value?.trim()||'';const promptText=typed||prompt('Describe the image you want DeftAI to create:');if(!promptText?.trim())return;if(typed){$('inp').value='';$('inp').style.height='auto'}
- $('send').disabled=true;
- try{const r=await api('/api/image',{method:'POST',body:JSON.stringify({prompt:promptText})}),j=await r.json();if(!r.ok)throw Error(j.error||'Image generation failed');
-  const c=getChat(),m={role:'assistant',content:'Generated image · '+j.cost+' credits'};c.messages.push(m);const el=addMsg(m),img=document.createElement('img');img.src=j.image;img.alt='AI generated image';img.style.cssText='display:block;max-width:100%;border-radius:12px;margin-top:10px';el.appendChild(img);save();loadStore();
- }catch(e){alert(e.message)}
- finally{$('send').disabled=false}
+function openImageStudio(){
+ const typed=$('inp')?.value?.trim()||'';$('imagePrompt').value=typed;$('imageStudioStatus').textContent='';
+ $('imageStudio').classList.add('open');setTimeout(()=>$('imagePrompt').focus(),40);
+}
+function closeImageStudio(){if($('imageGenerateBtn')?.disabled)return;$('imageStudio').classList.remove('open')}
+function setImagePrompt(value){$('imagePrompt').value=value;$('imagePrompt').focus()}
+async function runImageGeneration(){
+ const promptText=$('imagePrompt').value.trim();
+ if(promptText.length<3){$('imageStudioStatus').textContent='Please describe your image first.';$('imagePrompt').focus();return}
+ const button=$('imageGenerateBtn'),status=$('imageStudioStatus'),c=getChat();
+ button.disabled=true;button.textContent='Creating…';status.textContent='Preparing your artwork…';
+ const pending=addMsg({role:'assistant',content:''});pending.innerHTML=IMAGE_TYP+'<small class="studio-progress">This can take a little while.</small>';
+ $('imageStudio').classList.remove('open');
+ try{
+  const r=await api('/api/image',{method:'POST',body:JSON.stringify({prompt:promptText})}),j=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(j.error||'Image generation failed');
+  const m={role:'assistant',content:'Image created · '+j.cost+' credits',image:j.image};
+  c.messages.push(m);pending.remove();addMsg(m);actions(c);save();await loadStore();
+ }catch(e){
+  pending.remove();const message='Image generation failed: '+e.message;
+  c.messages.push({role:'assistant',content:message});addMsg({role:'assistant',content:message});actions(c);save();
+ }finally{button.disabled=false;button.textContent='✦ Generate';status.textContent=''}
 }
 
 window.addEventListener('keydown',e=>{
- if(e.key==='Escape'){closeSettings();return}
+ if(e.key==='Escape'){closeSettings();if(!$('imageGenerateBtn')?.disabled)closeImageStudio();return}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('chatSearch').focus();return}
  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();send();return}
  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='n'){e.preventDefault();newChat();renderList();renderMsgs();$('inp').focus();return}
