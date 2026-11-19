@@ -361,7 +361,7 @@ app.get('/api/admin/metrics',h(async(req,res)=>{
 app.get('/api/admin/health',h(async(req,res)=>{
  if(!adminOnly(req,res))return;
  const checks={storage:!saveError,database:!pool||databaseReady,groqConfigured:!!KEY,geminiConfigured:!!GEMINI_API_KEY,openaiConfigured:!!OPENAI_API_KEY,imageConfigured:!!(process.env.CLOUDFLARE_ACCOUNT_ID&&process.env.CLOUDFLARE_API_TOKEN),emailConfigured:!!RESEND_API_KEY,voiceConfigured:!!AZURE_SPEECH_KEY};
- res.json({ok:Object.values(checks).every(Boolean),checks,uptimeSeconds:Math.floor(process.uptime()),memory:process.memoryUsage(),node:process.version});
+ res.json({ok:checks.storage&&checks.database,checks,optionalIntegrations:{groq:checks.groqConfigured,gemini:checks.geminiConfigured,openai:checks.openaiConfigured,image:checks.imageConfigured,email:checks.emailConfigured,voice:checks.voiceConfigured},uptimeSeconds:Math.floor(process.uptime()),memory:process.memoryUsage(),node:process.version});
 }));
 app.get('/api/admin/credit-ledger/:username',h(async(req,res)=>{
  if(!adminOnly(req,res))return;
