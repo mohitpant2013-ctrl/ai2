@@ -1,1 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#000"/><path d="M256 58c22 88 104 132 104 232a104 104 0 1 1-208 0c0-42 18-72 44-101 0 45 20 66 45 71-17-82-8-151 15-202z" fill="#a78bfa"/><path d="M256 166c12 44 52 67 52 119a52 52 0 1 1-104 0c0-21 9-36 22-51 0 23 10 33 23 36-9-41-4-75 7-104z" fill="#22d3ee"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="DeftAI">
+<defs><linearGradient id="g" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse"><stop stop-color="#ff925f"/><stop offset=".52" stop-color="#a78bfa"/><stop offset="1" stop-color="#52d6d0"/></linearGradient><linearGradient id="s" x1="30" y1="24" x2="94" y2="104" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#dcdcff" stop-opacity=".78"/></linearGradient></defs>
+<rect x="4" y="4" width="120" height="120" rx="31" fill="#0c0c12"/><rect x="5" y="5" width="118" height="118" rx="30" fill="none" stroke="url(#g)" stroke-opacity=".8" stroke-width="2"/>
+<path d="M30 27h29c25 0 40 14 40 37S84 101 59 101H30V27Zm22 18v38h7c13 0 20-7 20-19s-7-19-20-19h-7Z" fill="url(#s)" fill-rule="evenodd"/>
+<path d="m78 24-9 29h17L59 105l8-39H50l28-42Z" fill="url(#g)" stroke="#0c0c12" stroke-width="3" stroke-linejoin="round"/></svg>
