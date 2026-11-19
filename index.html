@@ -457,7 +457,7 @@ function renderList(){const l=$('list');l.innerHTML='';const q=($('chatSearch')?
   const shown=[...chats].sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned)).filter(c=>!q||c.title.toLowerCase().includes(q)||c.messages.some(m=>String(m.content||m.shown||'').toLowerCase().includes(q)));
   shown.forEach(c=>{const d=document.createElement('div');d.className='ci'+(c.id===cur?' on':'');
     d.innerHTML='<span></span><button type="button" class="ci-manage" title="Rename or pin" aria-label="Manage chat">⋯</button><b title="Delete">'+ic('x')+'</b>';d.firstChild.textContent=(c.pinned?'📌 ':'')+c.title;
-    d.onclick=()=>{cur=c.id;renderList();renderMsgs();$('side').classList.remove('open')};
+    d.onclick=()=>{currentPage='chat';$('box').style.display='';cur=c.id;renderList();renderMsgs();$('side').classList.remove('open')};
     d.querySelector('.ci-manage').onclick=e=>{e.stopPropagation();manageChat(c.id)};
     d.lastChild.onclick=e=>{e.stopPropagation();if(!confirm('Ye chat delete karni hai?'))return;
       chats=chats.filter(x=>x.id!==c.id);if(!chats.length)newChat();else if(cur===c.id)cur=chats[0].id;save();renderList();renderMsgs()};
@@ -473,7 +473,7 @@ function addMsg(m){const d=document.createElement('div');
     d.appendChild(document.createTextNode(m.shown??m.content))}
   else{d.className='m b';paint(d,m.content,m.sources);if(m.image){const card=document.createElement('div');card.className='generated-image-card';const img=document.createElement('img');img.src=m.image;img.alt='AI-generated artwork';img.loading='lazy';card.appendChild(img);const dl=document.createElement('a');dl.className='image-download';dl.href=m.image;dl.download='deftai-artwork.jpg';dl.textContent='↓ Save image';card.appendChild(dl);d.appendChild(card)}}
   $('msgs').appendChild(d);scrollChat();return d}
-function goHome(){currentPage='chat';$('box').style.display='';const c=getChat();if(c&&c.messages.length)newChat();renderList();renderMsgs();$('inp').blur();$('chat').scrollTop=0}
+function goHome(){currentPage='chat';$('box').style.display='';$('side').classList.remove('open');const c=getChat();if(c&&c.messages.length)newChat();renderList();renderMsgs();$('inp').blur();$('chat').scrollTop=0}
 function selectChat(id){currentPage='chat';$('box').style.display='';cur=id;renderList();renderMsgs();$('side').classList.remove('open')}
 function dashboardMarkup(){
  const recent=[...chats].filter(c=>c.messages&&c.messages.length).slice(0,4);
