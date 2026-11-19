@@ -546,7 +546,7 @@ async function go(){
       e.message==='INSUFFICIENT_CREDITS'?'Credits khatam ho gaye. Plans kholkar balance aur credit options dekho.':
       e.message==='PROVIDER_LIMIT'?'DeftAI ka AI provider abhi usage limit par hai. Alternate models bhi busy hain; thodi der baad try karo.':
       e.message==='PROVIDER_ERROR'?'AI service temporarily unavailable hai. Thodi der baad retry karo.':
-      e.message.startsWith('API:')?'Error: '+e.message.slice(4):(e.message.startsWith('Gemini error')||e.message.startsWith('OpenAI'))?e.message:'Server se connect nahi hua. Render free plan so jata hai, 1 minute baad try karo.';
+      e.message.startsWith('API:')?'Error: '+e.message.slice(4):(e.message.startsWith('Gemini error')||e.message.startsWith('Gemini is selected')||e.message.startsWith('OpenAI')||e.message.startsWith('AI provider temporarily'))?e.message:'Server se connect nahi hua. Render free plan so jata hai, 1 minute baad try karo.';
       bd.textContent=m;c.messages.pop()}
   }finally{ctrl=null;$('send').style.display='';$('stop').style.display='none';save();loadStore()}
 }
