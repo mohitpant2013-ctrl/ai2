@@ -62,7 +62,7 @@ const TOKEN_SECRET_FILE=path.join(DATA_DIR,'token-secret.key');
 let generatedSecret='';
 try{
  if(fs.existsSync(TOKEN_SECRET_FILE))generatedSecret=fs.readFileSync(TOKEN_SECRET_FILE,'utf8').trim();
- else{generatedSecret=crypto.randomBytes(48).toString('hex');fs.writeFileSync(TOKEN_SECRET_FILE,generatedSecret,{flag:'wx',mode:0o600});}
+ else{generatedSecret=crypto.createHash('sha256').update('deftai-session-v1:' + PASS).digest('hex');fs.writeFileSync(TOKEN_SECRET_FILE,generatedSecret,{flag:'wx',mode:0o600});}
 }catch(e){console.error('[auth] Could not persist session secret:',e.message);generatedSecret=crypto.createHash('sha256').update('deftai-unstable-session:'+String(process.env.RENDER_SERVICE_ID||'local')).digest('hex');}
 const SECRET=String(process.env.TOKEN_SECRET||generatedSecret).trim();
 if(!process.env.TOKEN_SECRET)console.warn('[auth] TOKEN_SECRET is not set. Session signing uses DATA_DIR/token-secret.key; mount a persistent disk at /var/data or set a long random TOKEN_SECRET in Render.');
