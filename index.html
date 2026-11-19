@@ -717,7 +717,7 @@ if('speechSynthesis' in window)speechSynthesis.addEventListener('voiceschanged',
 
 // ---- Model status ----
 async function status(){const d=$('dot'),t=$('stxt');
-  try{const s=await(await fetch('/api/status')).json();d.className='dot '+((s.gemini||s.openai||s.groq)?'on':'off');t.textContent=(s.gemini||s.groq)?'DeftAI Online':s.geminiConfigured?'Gemini key error':'Offline';t.title=['Gemini: '+(s.gemini?'online':s.geminiConfigured?(s.geminiError||'error'):'not configured'),'Groq: '+(s.groq?'online':'not configured'),s.durableStorage?'Storage: durable':'Storage: local on Render (ephemeral; may reset on redeploy)'].join('\\n')}
+  try{const s=await(await fetch('/api/status')).json();d.className='dot '+((s.gemini||s.openai||s.groq)?'on':'off');t.textContent=(s.gemini||s.groq||s.openai)?'DeftAI Online':s.geminiConfigured?'Gemini key error':'Offline';t.title=['Gemini: '+(s.gemini?'online':s.geminiConfigured?(s.geminiError||'error'):'not configured'),'Groq: '+(s.groq?'online':'not configured'),s.durableStorage?'Storage: durable':'Storage: local on Render (ephemeral; may reset on redeploy)'].join('\\n')}
   catch{d.className='dot wait';t.textContent='Server jag raha hai... (30-60 sec)'}}
 
 
