@@ -342,6 +342,7 @@ function setDeviceMode(mode){
  if(mode==='controller')document.body.classList.add('tv-mode','controller-mode');
  if(mode==='auto'&&window.matchMedia('(pointer: coarse)').matches)document.body.classList.add('touch-mode');
  const sel=$('deviceMode');if(sel&&sel.value!==mode)sel.value=mode;
+ if(mode==='controller'&&window.__deftGamepadStart)window.__deftGamepadStart();
 }
 function initDeviceSupport(){
  const saved=localStorage.getItem('deft_device_mode')||'auto';
@@ -363,9 +364,10 @@ function initDeviceSupport(){
     if(pad.buttons[1]?.pressed&&now-lastPress>350){$('inp').focus();lastPress=now}
    }
   }
-  requestAnimationFrame(frame);
+  if(document.body.classList.contains('controller-mode'))requestAnimationFrame(frame);else window.__deftGamepadLoop=false;
  }
- if(!window.__deftGamepadLoop){window.__deftGamepadLoop=true;requestAnimationFrame(frame)}
+ window.__deftGamepadStart=()=>{if(!window.__deftGamepadLoop){window.__deftGamepadLoop=true;requestAnimationFrame(frame)}};
+ if(document.body.classList.contains('controller-mode'))window.__deftGamepadStart();
 }
 
 function paint(d,t,src){
