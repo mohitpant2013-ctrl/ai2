@@ -272,13 +272,15 @@ const makeAdminToken = () => {
   const b = Buffer.from('admin|' + (Date.now() + 12 * 3600e3)).toString('base64url');
   return b + '.' + crypto.createHmac('sha256', SECRET).update(b).digest('base64url');
 };
-const PROVIDER_MODELS=[...(GEMINI_API_KEY?[GEMINI_MODEL]:[]),...(KEY?[MODEL]:[])];
-const DEFAULT_SETTINGS = { model:GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL,visionModel:VISION,allowedModels:PROVIDER_MODELS,reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
+const PROVIDER_MODELS=[...(GEMINI_API_KEY?[GEMINI_MODEL]:[]),...(OPENAI_API_KEY?[OPENAI_MODEL]:[]),...(KEY?[MODEL]:[])];
+const DEFAULT_MODEL=GEMINI_API_KEY?GEMINI_MODEL:OPENAI_API_KEY?OPENAI_MODEL:MODEL;
+const DEFAULT_SETTINGS = { model:DEFAULT_MODEL,visionModel:VISION,allowedModels:PROVIDER_MODELS,reasoningEffort:'medium',maxCompletionTokens:700,systemPrompt:'' };
 async function getSettings() {
  const saved=await kvGet('settings:global')||{};
  const allowed=PROVIDER_MODELS;
- const savedModel=String(saved.model||GEMINI_MODEL);
- const model=allowed.includes(savedModel)?savedModel:(GEMINI_API_KEY?GEMINI_MODEL:MODEL);
+ const savedModel=String(saved.model||DEFAULT_MODEL);
+ const fallbackModel=allowed.includes(DEFAULT_MODEL)?DEFAULT_MODEL:(allowed[0]||DEFAULT_MODEL);
+ const model=allowed.includes(savedModel)?savedModel:fallbackModel;
  return {...DEFAULT_SETTINGS,...saved,model,allowedModels:allowed};
 }
 async function appendAudit(event) {
