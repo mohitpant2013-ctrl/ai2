@@ -233,6 +233,7 @@ async function ddg(q, domains = []) {
 
 // AI turns the (Hinglish) question into a clean English search query, or NONE for chit-chat
 async function makeQuery(history, lastText) {
+  if (/\b(release|released|launch|launched|available|current|latest|today|date|price|version|update|schedule|result|winner|who is|who was|when did|where is|202[4-9])\b/i.test(lastText)) return String(lastText).slice(0,120);
   const ctx = history.slice(-4).map(m => m.role + ': ' + (typeof m.content === 'string' ? m.content : '').slice(0, 300)).join('\n');
   try {
     const r = await groq({
