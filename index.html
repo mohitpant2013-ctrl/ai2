@@ -160,7 +160,6 @@ body{background-color:var(--bg)!important}#main{background:transparent!important
   <button onclick="openSettings()">⚙ Settings & Personalization</button>
   <a href="/upgrade" class="upgrade-link">✦ Upgrade plan <span>↗</span></a>
   
-  <button onclick="exportChat()"><i data-i="download"></i> Export chat</button>
   <button id="installApp" onclick="installApp()" style="display:none">⬇ Install DeftAI</button>
   <div class="me"><span id="av">?</span><span id="uname"></span><button class="ib" title="Log out" onclick="logout()"><i data-i="logout"></i></button></div>
 </div>
@@ -235,7 +234,7 @@ body{background-color:var(--bg)!important}#main{background:transparent!important
 <div class="settingChoice"><b>Message bubbles</b><select id="prefBubble"><option value="soft">Soft rounded</option><option value="round">Extra rounded</option><option value="square">Square</option><option value="minimal">Minimal</option></select></div>
 <div class="settingChoice"><b>Display density</b><select id="prefDensity"><option value="comfortable">Comfortable</option><option value="compact">Compact</option><option value="spacious">Spacious</option></select></div><div class="settingChoice"><label class="checkLine"><input id="prefReduceMotion" type="checkbox"> Reduce animations</label></div><div class="settingChoice"><button type="button" onclick="saveAppearance()">Save appearance</button> <button type="button" onclick="resetAppearance()">Reset all</button><small>Wallpaper is local to this browser; it does not sync across devices.</small></div>
 <div class="settingChoice"><button type="button" onclick="resetAppearance()">Reset appearance</button></div></div>
-<div id="paneData" class="setPane" hidden><h2>Data controls</h2><p>Understand and manage the information used by DeftAI.</p><div class="settingChoice"><b>Export current conversation</b><small>Download this chat as a Markdown file.</small><button onclick="closeSettings();exportChat()">Export chat</button></div><div class="settingChoice"><b>What DeftAI stores</b><small>Account username, password hash (not your plain password), chats and saved preferences. Uploaded content is sent for processing when you use chat features. Hosting and AI providers may process technical/request data as described in the policy.</small></div><div class="settingChoice"><b>Storage and retention</b><small>Current app storage is a local JSON file on the hosting instance. It may be temporary and can be lost on restart/redeploy; do not treat DeftAI as permanent backup storage.</small></div><div class="settingChoice"><b>Privacy policy and terms</b><a href="/legal" target="_blank" rel="noopener">Read the full policy ↗</a></div></div>
+<div id="paneData" class="setPane" hidden><h2>Data controls</h2><p>Understand and manage the information used by DeftAI.</p><div class="settingChoice"><b>What DeftAI stores</b><small>Account username, password hash (not your plain password), chats and saved preferences. Uploaded content is sent for processing when you use chat features. Hosting and AI providers may process technical/request data as described in the policy.</small></div><div class="settingChoice"><b>Storage and retention</b><small>Current app storage is a local JSON file on the hosting instance. It may be temporary and can be lost on restart/redeploy; do not treat DeftAI as permanent backup storage.</small></div><div class="settingChoice"><b>Privacy policy and terms</b><a href="/legal" target="_blank" rel="noopener">Read the full policy ↗</a></div></div>
 <div id="paneAbout" class="setPane" hidden><h2>About DeftAI</h2><p>DeftAI · built by FyreDeft.</p><div class="settingChoice"><b>Version</b><span>Web edition · beta</span></div><div class="settingChoice"><b>Current plan</b><span>Free beta. No paid subscription or payment processing is currently offered in this app.</span></div><div class="settingChoice"><b>Terms & Privacy</b><a href="/legal">Read policies ↗</a></div></div>
 <footer class="settingsFooter"><span id="settingsMsg" class="setNote"></span><div><button onclick="closeSettings()">Close</button></div></footer>
 </div></section></div>
@@ -440,10 +439,6 @@ function mic(){const R=window.SpeechRecognition||window.webkitSpeechRecognition;
   const r=new R(),b=$('mic');r.lang=recognitionLanguage();r.interimResults=false;b.classList.add('rec');
   r.onresult=e=>{const i=$('inp');i.value+=(i.value?' ':'')+e.results[0][0].transcript};
   r.onend=r.onerror=()=>b.classList.remove('rec');r.start()}
-function exportChat(){const c=getChat();if(!c||!c.messages.length)return alert('Chat khaali hai');
-  const t='# '+c.title+'\n\n'+c.messages.map(m=>(m.role==='user'?'**You:** ':'**DeftAI:** ')+(m.shown??m.content)+(m.sources&&m.sources.length?'\n\nSources:\n'+m.sources.map((s,i)=>(i+1)+'. '+s.title+' - '+s.url).join('\n'):'')).join('\n\n---\n\n');
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/markdown'}));
-  a.download=(c.title||'chat').replace(/[^\w-]+/g,'_')+'.md';a.click()}
 
 
 // ---- Attachments ----
