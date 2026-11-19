@@ -433,12 +433,10 @@ app.post('/api/tts',h(async(req,res)=>{
 }));
 app.post('/api/image',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
- const accountId=process.env.CLOUDFLARE_ACCOUNT_ID||'',apiToken=process.env.CLOUDFLARE_API_TOKEN||'';
- if(!accountId||!apiToken)return res.status(503).json({error:'Image generation is not configured. Add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in Render.'});
+ const apiKey=process.env.STABILITY_API_KEY||'';
+ if(!apiKey)return res.status(503).json({error:'Image generation is not configured. Add STABILITY_API_KEY in Render → Environment.'});
  if(!allowScoped('image',u,5,3600000))return res.status(429).json({error:'Image generation limit reached for this hour. Please try later.'});
- const rawPrompt=String(req.body.prompt||'').trim().slice(0,2000);if(rawPrompt.length<3)return res.status(400).json({error:'Describe the image first.'});
- // Add clarifying context to clearly fictional, ordinary game-art prompts that image models may misread.
- // This is not a moderation bypass: provider safety checks remain enabled and authoritative.
+ const rawPrompt=String(req.body.prompt||'').trim().slice(0,1800);if(rawPrompt.length<3)return res.status(400).json({error:'Describe the image first.'});
  const hasSensitiveTerms=/\b(nsfw|nude|nudity|explicit|porn|sexual|erotic|fetish)\b/i.test(rawPrompt);
  const gameTitle=/\b(minecraft|roblox|fortnite|terraria|among us|valorant|counter.?strike|cs2|league of legends|zelda|pokemon)\b/i.test(rawPrompt);
  const gameSubject=/\b(player|character|avatar|skin|mob|creeper|blocky|game scene|screenshot|pvp|obby)\b/i.test(rawPrompt);
@@ -446,26 +444,30 @@ app.post('/api/image',h(async(req,res)=>{
  const prompt=benignGameArt
   ? 'Create a fictional video-game illustration. Keep characters stylized and fully clothed; keep any action non-graphic. Interpret short dialogue as ordinary friendly in-game speech. '+rawPrompt
   : rawPrompt;
+ const ratios=['1:1','16:9','9:16','3:2','2:3','4:5','5:4','4:3','3:4','21:9'];
+ const styles=['photographic','cinematic','anime','digital-art','fantasy-art','comic-book','pixel-art','3d-model','line-art','craft-clay','isometric','origami'];
+ const aspectRatio=ratios.includes(String(req.body.aspectRatio||''))?String(req.body.aspectRatio):'1:1';
+ const style=styles.includes(String(req.body.style||''))?String(req.body.style):'';
  const cost=20,current=await userCredits(u);if(current.balance<cost)return res.status(402).json({error:'Not enough credits. Open Plans to request more.'});
- const model='@cf/black-forest-labs/flux-1-schnell';
- await spendCredits(u,cost,'Image generation · Cloudflare FLUX.1 Schnell');
+ await spendCredits(u,cost,'Image generation · Stability AI Stable Image Core');
+ const form=new FormData();form.set('prompt',prompt);form.set('output_format','jpeg');form.set('aspect_ratio',aspectRatio);if(style)form.set('style_preset',style);
  let r;
  try{
-  r=await fetch('https://api.cloudflare.com/client/v4/accounts/'+encodeURIComponent(accountId)+'/ai/run/'+model,{
-   method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+apiToken},
-   body:JSON.stringify({prompt,steps:4}),signal:AbortSignal.timeout(90000)
+  r=await fetch('https://api.stability.ai/v2beta/stable-image/generate/core',{
+   method:'POST',headers:{Authorization:'Bearer '+apiKey,Accept:'image/*'},body:form,signal:AbortSignal.timeout(90000)
   });
  }catch(e){await addCredits(u,cost,'Image generation refund · network failure');throw e}
- const body=await r.json().catch(()=>({}));
- if(!r.ok||body.success===false){
-  const detail=String(body.errors?.[0]?.message||body.messages?.[0]?.message||'Cloudflare Workers AI request failed').slice(0,220);
+ if(!r.ok){
+  const detail=(await r.text().catch(()=>'' )).slice(0,260);
   await addCredits(u,cost,'Image generation refund · provider error');
-  console.error('Cloudflare image error:',r.status,detail);
-  return res.status(502).json({error:'Cloudflare image error '+r.status+': '+detail+' Credits were refunded.'});
+  console.error('Stability image error:',r.status,detail);
+  let friendly='Stability AI request failed ('+r.status+').';
+  try{const parsed=JSON.parse(detail);if(Array.isArray(parsed.errors)&&parsed.errors[0])friendly=String(parsed.errors[0]).slice(0,180);else if(parsed.message)friendly=String(parsed.message).slice(0,180)}catch{}
+  return res.status(502).json({error:friendly+' DeftAI credits were refunded.'});
  }
- const encoded=body.result?.image||body.result?.data?.[0]?.b64_json||'';
- if(!encoded){await addCredits(u,cost,'Image generation refund · empty response');return res.status(502).json({error:'Cloudflare returned no image. Credits were refunded.'});}
- const c=await userCredits(u);res.json({ok:true,image:'data:image/jpeg;base64,'+encoded,credits:c,cost,provider:'Cloudflare Workers AI',model});
+ const bytes=Buffer.from(await r.arrayBuffer());
+ if(!bytes.length){await addCredits(u,cost,'Image generation refund · empty response');return res.status(502).json({error:'Stability AI returned an empty image. DeftAI credits were refunded.'});}
+ const c=await userCredits(u);res.json({ok:true,image:'data:image/jpeg;base64,'+bytes.toString('base64'),credits:c,cost,provider:'Stability AI',model:'Stable Image Core',aspectRatio,style:style||'auto'});
 }));
 
 app.get('/api/admin/knowledge', h(async (req,res) => { if (!adminOnly(req,res)) return; res.json({ documents: (await kvGet('kb:documents')) || [] }); }));
