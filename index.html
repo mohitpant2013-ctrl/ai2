@@ -663,7 +663,7 @@ function openImageStudio(){
 }
 function closeImageStudio(){if($('imageGenerateBtn')?.disabled)return;$('imageStudio').classList.remove('open')}
 function setImagePrompt(value){$('imagePrompt').value=value;$('imagePrompt').focus()}
-function chatExportText(){const c=getChat();if(!c)return '';return '# '+(c.title||'DeftAI chat')+'\\n\\n'+c.messages.map(m=>'## '+(m.role==='user'?'You':'DeftAI')+'\\n\\n'+clean(String(m.shown??m.content??''))).join('\\n\\n---\\n\\n')}
+function chatExportText(){const c=getChat();if(!c)return '';return '# '+(c.title||'DeftAI chat')+'\n\n'+c.messages.map(m=>'## '+(m.role==='user'?'You':'DeftAI')+'\n\n'+clean(String(m.shown??m.content??''))).join('\n\n---\n\n')}
 function copyCurrentChat(){const text=chatExportText();if(!text)return alert('This chat is empty.');navigator.clipboard.writeText(text).then(()=>alert('Chat copied.')).catch(()=>alert('Clipboard permission unavailable.'))}
 function exportCurrentChat(){const text=chatExportText();if(!text)return alert('This chat is empty.');downloadAnswer(text,'md')}
 function manageChat(id){const c=chats.find(x=>x.id===id);if(!c)return;const action=prompt('Type "rename" to change its title, or "pin" to keep it at the top.');if(!action)return;if(action.trim().toLowerCase()==='rename'){const name=prompt('New chat title:',c.title||'');if(name&&name.trim())c.title=name.trim().slice(0,80)}else if(action.trim().toLowerCase()==='pin'){c.pinned=!c.pinned}else{return alert('Choose rename or pin.')}save();renderList()}
