@@ -495,6 +495,56 @@ function renderMsgs(){const w=$('msgs');w.innerHTML='';if(currentPage==='communi
  if(!c||!c.messages.length)w.innerHTML=dashboardMarkup();
  else{c.messages.forEach(addMsg);actions(c)}}
 
+
+async function openCommunity(){
+ currentPage='community';$('box').style.display='none';$('chat').scrollTop=0;$('side').classList.remove('open');
+ $('msgs').innerHTML='<div class="community-loading">Opening Deft Community…</div>';
+ await refreshCommunity();
+}
+async function refreshCommunity(){
+ try{const r=await api('/api/community');const j=await r.json();if(!r.ok)throw Error(j.error||'Community unavailable');communityData=j;renderCommunityMarkup()}
+ catch(e){$('msgs').innerHTML='<section class="community-shell"><h1>Deft Community</h1><p class="community-muted">'+esc(e.message)+'</p><button onclick="refreshCommunity()">Try again</button></section>'}
+}
+function renderCommunityMarkup(){
+ const d=communityData;if(!d){$('msgs').innerHTML='<div class="community-loading">Loading community…</div>';return}
+ const users=d.users||[],projects=d.projects||[],active=users.filter(x=>x.active).length;
+ const me=users.find(x=>x.username.toLowerCase()===d.me.toLowerCase())||{followers:0};
+ const userCards=users.map(u=>'<article class="community-user"><div class="community-avatar">'+esc(u.username.slice(0,1).toUpperCase())+'</div><div class="community-user-info"><b>'+esc(u.username)+'</b><small><i class="presence '+(u.active?'active':'')+'"></i>'+(u.active?'Active now':'Member')+' · '+u.followers+' followers</small></div>'+(u.username.toLowerCase()===d.me.toLowerCase()?'<span class="you-label">You</span>':'<button class="follow-btn '+(u.following?'following':'')+'" data-follow="'+esc(u.username)+'">'+(u.following?'Following':'Follow')+'</button>')+'</article>').join('');
+ const projectCards=projects.map(p=>'<article class="community-project"><div class="project-topline"><span class="project-tag">COMMUNITY PROJECT</span><span class="project-date">'+new Date(p.updatedAt||p.createdAt).toLocaleDateString()+'</span></div><h3>'+esc(p.title)+'</h3><p>'+esc(p.description)+'</p><div class="project-by">Created by <b>'+esc(p.author)+'</b></div><details class="project-details"><summary>View project details</summary><pre>'+esc(p.details)+'</pre></details><div class="project-actions"><button data-like="'+esc(p.id)+'" class="'+(p.liked?'liked':'')+'">♥ '+p.likes+'</button>'+(p.author.toLowerCase()===d.me.toLowerCase()?'<button class="remove-project" data-remove="'+esc(p.id)+'">Remove</button>':'')+'</div></article>').join('');
+ const ownOptions=projectsLocal().map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('');
+ const empty=projects.length?'':'<div class="community-empty">No public projects yet. Be the first to share something you built.</div>';
+ $('msgs').innerHTML='<section class="community-shell"><div class="community-heading"><div><div class="community-kicker">DEFTAI NETWORK</div><h1>Deft Community</h1><p>Meet builders, follow creators and share what you are making.</p></div><button class="community-refresh" onclick="refreshCommunity()">↻ Refresh</button></div><div class="community-stats"><div><b>'+users.length+'</b><span>Members</span></div><div><b>'+active+'</b><span>Active now</span></div><div><b>'+me.followers+'</b><span>Your followers</span></div><div><b>'+d.following+'</b><span>Following</span></div></div><div class="community-columns"><main><div class="community-section-head"><div><small>MADE BY THE COMMUNITY</small><h2>Explore projects</h2></div></div><div class="community-project-grid">'+(projects.length?projectCards:empty)+'</div></main><aside class="community-rail"><section class="community-panel"><div class="community-section-head"><div><small>YOUR CREATOR SPACE</small><h2>Share a project</h2></div></div><form id="communityCreateForm"><label>Project title<input name="title" maxlength="80" required placeholder="e.g. DeftClient PvP Engine"></label><label>Short description<textarea name="description" maxlength="240" required rows="2" placeholder="What does it do?"></textarea></label><label>Project details<textarea name="details" maxlength="8000" required rows="5" placeholder="Explain your idea, features, progress or how others can contribute…"></textarea></label><button class="community-primary" type="submit">＋ Publish project</button><div id="communityFormStatus" role="status"></div></form><div class="publish-existing"><b>Already have a Project Recall?</b><select id="publishExisting" '+(projectsLocal().length?'':'disabled')+'><option value="">Choose saved project…</option>'+ownOptions+'</select><button id="publishExistingBtn" '+(projectsLocal().length?'':'disabled')+'>Publish saved project</button><small>Only publish notes you are comfortable sharing publicly.</small></div></section><section class="community-panel"><div class="community-section-head"><div><small>PEOPLE</small><h2>Members to follow</h2></div></div><div class="community-user-list">'+(userCards||'<p class="community-muted">No members yet.</p>')+'</div></section></aside></div><p class="community-footnote">Public projects and profile activity are visible to other DeftAI members. Share only information you are comfortable making public.</p></section>';
+ $('communityCreateForm')?.addEventListener('submit',createCommunityProject);
+ $('msgs').querySelectorAll('[data-follow]').forEach(b=>b.addEventListener('click',()=>toggleFollow(b.dataset.follow)));
+ $('msgs').querySelectorAll('[data-like]').forEach(b=>b.addEventListener('click',()=>likeCommunityProject(b.dataset.like)));
+ $('msgs').querySelectorAll('[data-remove]').forEach(b=>b.addEventListener('click',()=>removeCommunityProject(b.dataset.remove)));
+ $('publishExistingBtn')?.addEventListener('click',publishExistingProject);
+}
+function projectsLocal(){return projects}
+async function createCommunityProject(e){
+ e.preventDefault();const form=e.currentTarget,status=$('communityFormStatus'),fd=new FormData(form);status.textContent='Publishing…';
+ try{const r=await api('/api/community/projects',{method:'POST',body:JSON.stringify({title:fd.get('title'),description:fd.get('description'),details:fd.get('details')})});const j=await r.json();if(!r.ok)throw Error(j.error);form.reset();await refreshCommunity()}
+ catch(err){status.textContent=err.message}
+}
+async function publishExistingProject(){
+ const id=$('publishExisting').value;if(!id)return;
+ try{const r=await api('/api/community/publish/'+encodeURIComponent(id),{method:'POST',body:'{}'});const j=await r.json();if(!r.ok)throw Error(j.error);await refreshCommunity()}
+ catch(e){alert(e.message)}
+}
+async function toggleFollow(username){
+ try{const r=await api('/api/community/follow/'+encodeURIComponent(username),{method:'POST',body:'{}'});const j=await r.json();if(!r.ok)throw Error(j.error);await refreshCommunity()}
+ catch(e){alert(e.message)}
+}
+async function likeCommunityProject(id){
+ try{const r=await api('/api/community/projects/'+encodeURIComponent(id)+'/like',{method:'POST',body:'{}'});const j=await r.json();if(!r.ok)throw Error(j.error);await refreshCommunity()}
+ catch(e){alert(e.message)}
+}
+async function removeCommunityProject(id){
+ if(!confirm('Remove this public project from the community?'))return;
+ try{const r=await api('/api/community/projects/'+encodeURIComponent(id),{method:'DELETE'});const j=await r.json();if(!r.ok)throw Error(j.error);await refreshCommunity()}
+ catch(e){alert(e.message)}
+}
+
 function actions(c){
   const w=$('msgs');w.querySelectorAll('.ab,.acts').forEach(x=>x.remove());
   const ch=[...w.children];
