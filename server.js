@@ -251,6 +251,7 @@ async function appendAudit(event) {
   await kvSet('audit:events',next);
 }
 function adminOnly(req, res) { if (!adminToken(req)) { res.status(401).json({ error: 'Admin login required' }); return false; } return true; }
+app.get('/deft-icon.svg', (req, res) => res.sendFile(path.join(__dirname, 'deft-icon.svg')));
 app.get('/control', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 app.get('/legal', (req, res) => res.sendFile(path.join(__dirname, 'legal.html')));
 app.post('/api/admin/login', (req, res) => {
