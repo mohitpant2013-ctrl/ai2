@@ -219,7 +219,7 @@ body{background:radial-gradient(ellipse at 72% -15%,rgba(124,92,255,.18),transpa
 <div id="main">
   <div id="top"><button id="menu" class="ib" onclick="$('side').classList.toggle('open')"><i data-i="menu"></i></button>
     <span class="pill"><span class="dot wait" id="dot"></span><span id="stxt">Checking...</span></span><span id="syncStatus" class="fine" aria-live="polite" style="white-space:nowrap">Saved</span>
-    <button onclick="openSettings()" title="Settings">⚙</button>
+    <button onclick="openSettings()" title="Settings" aria-label="Settings">⚙</button><button id="focusToggle" class="topAction" type="button" onclick="toggleFocusMode()" aria-pressed="false" title="Hide the sidebar for a distraction-free chat">Focus</button><button class="topAction" type="button" onclick="openShortcuts()" title="Keyboard shortcuts">⌨</button>
     <a href="/upgrade" class="top-upgrade">✦ Upgrade <span id="creditCount">…</span></a><select id="deviceMode" aria-label="Device layout" title="Choose an interface layout" onchange="setDeviceMode(this.value)"><option value="auto">Auto layout</option><option value="tv">TV / remote</option><option value="touch">Touchscreen</option><option value="controller">Controller</option><option value="compact">Compact</option></select><select id="mode" onchange="localStorage.setItem('deft_mode',this.value)"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select></div>
   <div id="chat"><div class="wrap" id="msgs"></div></div>
   <div id="box"><div id="bar">
@@ -306,6 +306,7 @@ body{background:radial-gradient(ellipse at 72% -15%,rgba(124,92,255,.18),transpa
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<div id="shortcutsModal" class="shortcuts-overlay" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle" hidden><section class="shortcuts-card"><div class="shortcuts-head"><div><small>DEFTAI QUICK GUIDE</small><h2 id="shortcutsTitle">Keyboard shortcuts</h2></div><button type="button" class="ib" onclick="closeShortcuts()" aria-label="Close shortcuts">✕</button></div><div class="shortcut-row"><span>Search conversations</span><kbd>Ctrl</kbd><kbd>K</kbd></div><div class="shortcut-row"><span>Send message</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div><div class="shortcut-row"><span>Start a new chat</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></div><div class="shortcut-row"><span>Focus message box</span><kbd>/</kbd></div><div class="shortcut-row"><span>Show this guide</span><kbd>?</kbd></div><div class="shortcut-row"><span>Close dialog</span><kbd>Esc</kbd></div><p>Shortcuts are disabled while typing in text fields, except the send shortcut.</p><button class="pri" type="button" onclick="closeShortcuts()">Got it</button></section></div>
 <script>
 const $=id=>document.getElementById(id);
 const ic=n=>'<svg class="ic"><use href="#i-'+n+'"/></svg>';
@@ -390,6 +391,10 @@ async function load(){try{const r=await api('/api/chats');if(r.status===401){log
 let token=localStorage.getItem('deft_token')||'',amode='in';
 let projects=[],activeProjectId='';
 let currentPage='chat',communityData=null;
+function toggleFocusMode(force){const enabled=typeof force==='boolean'?force:!document.body.classList.contains('focus-mode');document.body.classList.toggle('focus-mode',enabled);const b=$('focusToggle');if(b){b.classList.toggle('active',enabled);b.setAttribute('aria-pressed',String(enabled));b.textContent=enabled?'Exit focus':'Focus'}try{localStorage.setItem('deft_focus_mode',enabled?'1':'0')}catch{}}
+function initFocusMode(){let enabled=false;try{enabled=localStorage.getItem('deft_focus_mode')==='1'}catch{}toggleFocusMode(enabled)}
+function openShortcuts(){$('shortcutsModal').hidden=false;document.body.style.overflow='hidden'}
+function closeShortcuts(){$('shortcutsModal').hidden=true;document.body.style.overflow=''}
 function toggleSidebar(){document.body.classList.toggle('sidebar-collapsed');localStorage.setItem('deft_sidebar_collapsed',document.body.classList.contains('sidebar-collapsed')?'1':'0');const b=$('sideCollapse');if(b){b.textContent=document.body.classList.contains('sidebar-collapsed')?'›':'‹';b.title=document.body.classList.contains('sidebar-collapsed')?'Expand sidebar':'Collapse sidebar'}}
 function initSidebar(){if(localStorage.getItem('deft_sidebar_collapsed')==='1')document.body.classList.add('sidebar-collapsed');const b=$('sideCollapse');if(b){b.textContent=document.body.classList.contains('sidebar-collapsed')?'›':'‹';b.title=document.body.classList.contains('sidebar-collapsed')?'Expand sidebar':'Collapse sidebar'}}
 function activeProject(){return projects.find(p=>p.id===activeProjectId)}
@@ -820,7 +825,8 @@ async function runImageGeneration(){
 }
 
 window.addEventListener('keydown',e=>{
- if(e.key==='Escape'){closeSettings();if(!$('imageGenerateBtn')?.disabled)closeImageStudio();return}
+ if(e.key==='?'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){e.preventDefault();openShortcuts();return}
+ if(e.key==='Escape'){closeShortcuts();closeSettings();if(!$('imageGenerateBtn')?.disabled)closeImageStudio();return}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('chatSearch').focus();return}
  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();send();return}
  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='n'){e.preventDefault();newChat();renderList();renderMsgs();$('inp').focus();return}
@@ -830,11 +836,14 @@ window.addEventListener('keydown',e=>{
 let installPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('installApp').style.display='inline-flex'});
 async function installApp(){if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('installApp').style.display='none'}
-window.onload=()=>{initSidebar();initDeviceSupport();document.querySelectorAll('i[data-i]').forEach(e=>e.outerHTML=ic(e.dataset.i));
+window.onload=()=>{initSidebar();initFocusMode();initDeviceSupport();document.querySelectorAll('i[data-i]').forEach(e=>e.outerHTML=ic(e.dataset.i));
   bindAppearanceControls();applyAccent();applyDisplay();applyAppearance();$('mode').value=localStorage.getItem('deft_mode')||'';$('modelChoice').addEventListener('change',()=>localStorage.setItem('deft_model',$('modelChoice').value));status();setInterval(status,30000);
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
   user=localStorage.getItem('deft_user')||'';if(token&&user)start()};
 </script>
+<style>
+.shortcuts-overlay{position:fixed;inset:0;z-index:10020;display:grid;place-items:center;padding:18px;background:rgba(0,0,0,.68);backdrop-filter:blur(10px)}.shortcuts-overlay[hidden]{display:none}.shortcuts-card{width:min(100%,480px);padding:22px;border:1px solid var(--bd2);border-radius:20px;background:var(--panel);box-shadow:0 24px 90px #0009}.shortcuts-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}.shortcuts-head small{font-size:10px;letter-spacing:1.5px;color:var(--mu)}.shortcuts-head h2{font-size:21px;margin:4px 0}.shortcut-row{display:flex;align-items:center;gap:6px;padding:11px 0;border-top:1px solid var(--bd);font-size:13px}.shortcut-row span{margin-right:auto}.shortcut-row kbd{min-width:27px;padding:4px 7px;text-align:center;border:1px solid var(--bd2);border-radius:6px;background:var(--el);font:11px ui-monospace,monospace;color:var(--tx)}.shortcuts-card p{font-size:11px;color:var(--mu);margin:14px 0}.shortcuts-card>.pri{width:100%}.focus-mode #main{width:100%;min-width:0}#focusToggle.active{border-color:var(--ac);color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,transparent)}
+</style>
 <style>
 body{background-size:cover;background-position:center;background-attachment:fixed}
 #side,#top,#bar{backdrop-filter:blur(var(--panel-blur,12px));-webkit-backdrop-filter:blur(var(--panel-blur,12px));background:var(--panel)}
