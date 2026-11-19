@@ -55,13 +55,19 @@ const fs = require('fs');
 const { Pool } = require('pg');
 const pool = process.env.DATABASE_URL ? new Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_SSL==='disable'?false:{rejectUnauthorized:false},max:5,idleTimeoutMillis:30000,connectionTimeoutMillis:10000}) : null;
 let databaseReady=false;
-// Session signing must never depend on provider API keys: rotating Gemini/Groq keys must not invalidate accounts.
-const SECRET = process.env.TOKEN_SECRET || crypto.createHash('sha256').update('deftai-session-v1:' + PASS).digest('hex');
-if(!process.env.TOKEN_SECRET)console.warn('TOKEN_SECRET is not set. Set a long random TOKEN_SECRET in Render to protect sessions; this fallback remains stable across provider-key changes.');
-
-// Simple local JSON storage. No Redis or external database required.
+// Session signing is independent of AI providers and plan settings.
 const DATA_DIR=process.env.DATA_DIR||path.join(__dirname,'data');
 try{fs.mkdirSync(DATA_DIR,{recursive:true});}catch(e){console.error('Data directory unavailable:',e.message)}
+const TOKEN_SECRET_FILE=path.join(DATA_DIR,'token-secret.key');
+let generatedSecret='';
+try{
+ if(fs.existsSync(TOKEN_SECRET_FILE))generatedSecret=fs.readFileSync(TOKEN_SECRET_FILE,'utf8').trim();
+ else{generatedSecret=crypto.randomBytes(48).toString('hex');fs.writeFileSync(TOKEN_SECRET_FILE,generatedSecret,{flag:'wx',mode:0o600});}
+}catch(e){console.error('[auth] Could not persist session secret:',e.message);generatedSecret=crypto.createHash('sha256').update('deftai-unstable-session:'+String(process.env.RENDER_SERVICE_ID||'local')).digest('hex');}
+const SECRET=String(process.env.TOKEN_SECRET||generatedSecret).trim();
+if(!process.env.TOKEN_SECRET)console.warn('[auth] TOKEN_SECRET is not set. Session signing uses DATA_DIR/token-secret.key; mount a persistent disk at /var/data or set a long random TOKEN_SECRET in Render.');
+
+// Local JSON storage is suitable only with a persistent disk. PostgreSQL is recommended.
 const FILE=path.join(DATA_DIR,'deftai-data.json');
 const LEGACY_FILE='/tmp/deftai-data.json';
 try{if(!fs.existsSync(FILE)&&fs.existsSync(LEGACY_FILE))fs.copyFileSync(LEGACY_FILE,FILE)}catch(e){console.error('Legacy data migration failed:',e.message)}
@@ -566,7 +572,12 @@ app.post('/api/register',h(async(req,res)=>{
 app.post('/api/login',h(async(req,res)=>{
  const identifier=String(req.body.username||req.body.identifier||'').trim(),password=String(req.body.password||''),normalized=identifier.toLowerCase(),key=(req.ip||'unknown')+':'+normalized;
  if(recent(failedLogins,key,600000).length>=10)return res.status(429).json({error:'Too many incorrect passwords. Wait 10 minutes.'});
- const username=normalized.includes('@')?await kvGet('email:'+normalized):normalized,u=username?await kvGet('u:'+username):null;
+ let username=normalized.includes('@')?await kvGet('email:'+normalized):normalized;
+ if(normalized.includes('@')&&!username){
+  const match=Object.keys(mem).find(k=>k.startsWith('u:')&&String(mem[k]?.email||'').toLowerCase()===normalized);
+  if(match){username=match.slice(2);await kvSet('email:'+normalized,username).catch(()=>{});}
+ }
+ const u=username?await kvGet('u:'+username):null;
  const bad=()=>{recordAttempt(failedLogins,key,600000);appendAudit({type:'login_failed',username:identifier.slice(0,40),detail:'Invalid credentials'}).catch(()=>{});return res.status(401).json({error:'Username/email ya password galat hai'});};
  if(!u)return bad();
  const a=Buffer.from(await scrypt(password,u.salt)),b=Buffer.from(u.hash);
