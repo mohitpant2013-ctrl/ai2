@@ -700,6 +700,27 @@ app.post('/api/community/projects/:id/like',h(async(req,res)=>{
  list[idx]={...p,likes:likes.slice(0,10000),updatedAt:Date.now()};await kvSet('community:projects',list);
  res.json({ok:true,liked,likes:list[idx].likes.length});
 }));
+app.post('/api/community/projects/:id/report',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const list=await kvGet('community:projects')||[],project=list.find(p=>p.id===req.params.id&&p.status==='published');
+ if(!project)return res.status(404).json({error:'Project not found'});
+ if(project.author.toLowerCase()===me)return res.status(400).json({error:'You cannot report your own project.'});
+ const reports=await kvGet('community:reports')||[];
+ if(reports.some(x=>x.projectId===project.id&&x.reporter===me))return res.status(409).json({error:'You have already reported this project.'});
+ const reason=String(req.body.reason||'').trim().slice(0,240);
+ if(reason.length<5)return res.status(400).json({error:'Please provide a short reason for the report.'});
+ reports.unshift({id:crypto.randomUUID(),projectId:project.id,projectTitle:project.title,author:project.author,reporter:me,reason,at:Date.now(),status:'open'});
+ await kvSet('community:reports',reports.slice(0,1000));res.status(201).json({ok:true});
+}));
+app.get('/api/admin/community-reports',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;
+ res.json({reports:(await kvGet('community:reports')||[]).slice(0,500)});
+}));
+app.delete('/api/admin/community-reports/:id',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;
+ const reports=await kvGet('community:reports')||[];
+ await kvSet('community:reports',reports.filter(x=>x.id!==req.params.id));res.json({ok:true});
+}));
 app.delete('/api/community/projects/:id',h(async(req,res)=>{
  const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
  const list=await kvGet('community:projects')||[],p=list.find(x=>x.id===req.params.id);
