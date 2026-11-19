@@ -11,11 +11,11 @@ for (const file of files) {
     checked++;
     continue;
   }
-  const scripts = [...source.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)];
+  const scripts = [...source.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
   for (let n = 0; n < scripts.length; n++) {
     const attrs = scripts[n][1] || '';
     const body = scripts[n][2] || '';
-    if (!body.trim() || /\\bsrc\\s*=/.test(attrs)) continue;
+    if (!body.trim() || /\bsrc\s*=/.test(attrs)) continue;
     new vm.Script(body, { filename: file + ':inline-script-' + (n + 1) });
     checked++;
   }
