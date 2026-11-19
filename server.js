@@ -256,11 +256,11 @@ function trustedSearchResult(x) {
  try { const h=new URL(x.url).hostname.toLowerCase().replace(/^www\\./,''); return h==='reddit.com'||h.endsWith('.reddit.com')||TRUSTED_SEARCH_DOMAINS.some(d=>h===d||h.endsWith('.'+d)); } catch { return false; }
 }
 async function research(q) {
- const minecraft=/\\b(minecraft|mc|elytra|redstone|nether|enderman|warden|creeper|villager|mace|wind charge|diamond|netherite|enchant(?:ment)?)\\b/i.test(q);
+ const minecraft=/\b(minecraft|mc|elytra|redstone|nether|enderman|warden|creeper|villager|mace|wind charge|diamond|netherite|enchant(?:ment)?)\b/i.test(q);
  const [t,d,w,mt,md]=await Promise.allSettled([tavily(q),ddg(q),wiki(q),minecraft?tavily('Minecraft Wiki '+q):Promise.resolve([]),minecraft?ddg('Minecraft Wiki '+q):Promise.resolve([])]);
  const pages=[...ok(t),...ok(d),...ok(w),...ok(mt),...ok(md)].filter(x=>safeUrl(x.url)&&x.text&&x.title);
  const seen=new Set();
- return pages.filter(x=>{const key=x.url.replace(/#.*$/,'').replace(/\\/$/,'');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,10);
+ return pages.filter(x=>{const key=x.url.replace(/#.*$/,'').replace(/\/$/,'');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,10);
 }
 
 
