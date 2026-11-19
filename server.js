@@ -409,6 +409,30 @@ app.get('/api/credits/history',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
  res.json({history:(await kvGet('credit-ledger:'+u)||[]).slice(0,30)});
 }));
+
+/* Admin-created promo codes. Credits redeem immediately; percentage codes apply to the next manual plan request. */
+async function getDiscountCodes(){return (await kvGet('discount:codes')||[]).filter(x=>x&&typeof x.code==='string');}
+app.get('/api/admin/discount-codes',h(async(req,res)=>{if(!adminOnly(req,res))return;const codes=await getDiscountCodes();res.json({codes:codes.map(({id,code,type,value,maxUses,uses,expiresAt,active,createdAt})=>({id,code,type,value,maxUses,uses,expiresAt,active,createdAt}))});}));
+app.post('/api/admin/discount-codes',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;const b=req.body||{},prefix=String(b.prefix||'DEFT').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,10)||'DEFT';
+ const count=Math.max(1,Math.min(90,Math.floor(Number(b.count)||1))),type=['credits','percent'].includes(b.type)?b.type:'credits',value=Math.floor(Number(b.value)||0),maxUses=Math.max(1,Math.min(100000,Math.floor(Number(b.maxUses)||1))),expiresAt=b.expiresAt?new Date(b.expiresAt).getTime():0;
+ if(value<1||value>(type==='percent'?90:1000000))return res.status(400).json({error:type==='percent'?'Discount must be 1–90%.':'Bonus must be 1–1,000,000 credits.'});
+ if(b.expiresAt&&(!Number.isFinite(expiresAt)||expiresAt<=Date.now()))return res.status(400).json({error:'Expiry must be a future date.'});
+ const codes=await getDiscountCodes(),existing=new Set(codes.map(x=>x.code)),made=[];
+ for(let i=0;i<count;i++){let code;do{code=prefix+'-'+crypto.randomBytes(3).toString('hex').toUpperCase()}while(existing.has(code));existing.add(code);made.push({id:crypto.randomUUID(),code,type,value,maxUses,uses:0,expiresAt:expiresAt||null,active:true,createdAt:Date.now(),redeemedBy:[]});}
+ await kvSet('discount:codes',[...made,...codes].slice(0,1000));await appendAudit({type:'discount_codes_created',username:'admin',detail:count+' '+type+' promo code(s) created'});
+ res.status(201).json({ok:true,codes:made.map(x=>({code:x.code,type:x.type,value:x.value,maxUses:x.maxUses,expiresAt:x.expiresAt}))});
+}));
+app.delete('/api/admin/discount-codes/:id',h(async(req,res)=>{if(!adminOnly(req,res))return;const codes=await getDiscountCodes(),c=codes.find(x=>x.id===req.params.id);if(!c)return res.status(404).json({error:'Code not found.'});c.active=false;await kvSet('discount:codes',codes);res.json({ok:true});}));
+app.post('/api/redeem-code',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});if(!allowScoped('redeem-code',me,8,3600000))return res.status(429).json({error:'Too many code attempts. Try later.'});
+ const code=String(req.body.code||'').trim().toUpperCase().slice(0,40),codes=await getDiscountCodes(),c=codes.find(x=>x.code===code&&x.active);
+ if(!c)return res.status(404).json({error:'Invalid or inactive code.'});if(c.expiresAt&&c.expiresAt<=Date.now())return res.status(410).json({error:'This code has expired.'});
+ if(c.uses>=c.maxUses)return res.status(409).json({error:'This code has reached its redemption limit.'});if((c.redeemedBy||[]).includes(me))return res.status(409).json({error:'You have already used this code.'});
+ if(c.type==='credits'){await applyCreditDelta(me,c.value,'Promo code · '+c.code);c.uses++;c.redeemedBy=[...(c.redeemedBy||[]),me];await kvSet('discount:codes',codes);await appendAudit({type:'discount_redeemed',username:me,detail:'Redeemed '+c.code+' for '+c.value+' credits'});return res.json({ok:true,type:'credits',value:c.value,message:c.value+' bonus credits added.'});}
+ await kvSet('discount:active:'+me,{code:c.code,appliedAt:Date.now()});res.json({ok:true,type:'percent',value:c.value,message:c.value+'% plan discount applied to your next manual plan request.'});
+}));
+
 app.get('/api/store',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const cfg=await getCommerce(),settings=await getSettings(),credits=await userCredits(u);res.json({plans:(cfg.plans||[]).filter(p=>p.active),contact:cfg.contact,credits,creditHistory:(await kvGet('credit-ledger:'+u)||[]).slice(0,12),models:settings.allowedModels||[settings.model||MODEL]});}));
 app.post('/api/purchase-request',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});if(!allowScoped('purchase',u,3,86400000))return res.status(429).json({error:'Purchase request limit reached. Try again tomorrow.'});const id=String(req.body.planId||''),cfg=await getCommerce(),plan=(cfg.plans||[]).find(p=>p.id===id&&p.active);
@@ -706,6 +730,59 @@ app.post('/api/community/follow/:username',h(async(req,res)=>{
  const index=list.indexOf(target),following=index<0;if(following)list.push(target);else list.splice(index,1);
  await kvSet('community:follows:'+me,list.slice(0,1000));
  res.json({ok:true,following,followingCount:list.length});
+}));
+
+
+/* Deft Community direct messages: text-only, request-first, block/report controls. */
+const dmName=/^[a-zA-Z0-9_.]{3,20}$/;
+const dmIdFor=(a,b)=>crypto.createHash('sha256').update([a.toLowerCase(),b.toLowerCase()].sort().join('|')).digest('hex').slice(0,32);
+const dmThreadKey=id=>'community:dmthread:'+id;
+async function dmIndexAdd(username,id){const key='community:dm-index:'+username,list=(await kvGet(key)||[]).filter(x=>typeof x==='string');if(!list.includes(id)){list.unshift(id);await kvSet(key,list.slice(0,300));}}
+app.get('/api/community/dms',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const ids=(await kvGet('community:dm-index:'+me)||[]).slice(0,300),threads=[];
+ for(const id of ids){const t=await kvGet(dmThreadKey(id));if(!t||!t.users?.includes(me))continue;threads.push({id,other:t.users.find(x=>x!==me),status:t.status,requestedBy:t.requestedBy,lastMessage:t.messages?.at(-1)?.text||'',updatedAt:t.updatedAt||t.createdAt||0,unread:(t.messages||[]).filter(m=>m.to===me&&!m.read).length});}
+ threads.sort((a,b)=>b.updatedAt-a.updatedAt);res.json({threads,requests:threads.filter(t=>t.status==='pending'&&t.requestedBy!==me),conversations:threads.filter(t=>t.status==='accepted')});
+}));
+app.post('/api/community/dms/:username',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const target=String(req.params.username||'').toLowerCase(),text=String(req.body.text||'').trim().slice(0,1200);
+ if(!dmName.test(target)||target===me)return res.status(400).json({error:'Choose a valid community member.'});
+ if(!text)return res.status(400).json({error:'Write a message first.'});
+ if(!allowScoped('community-dm',me,20,3600000))return res.status(429).json({error:'Message limit reached. Try again later.'});
+ const account=await kvGet('u:'+target);if(!account||account.disabled)return res.status(404).json({error:'Member not found.'});
+ const id=dmIdFor(me,target),key=dmThreadKey(id),following=(await kvGet('community:follows:'+me)||[]).includes(target);let t=await kvGet(key);
+ if(t?.blockedBy?.length||t?.status==='blocked')return res.status(403).json({error:'Messaging is unavailable for this conversation.'});
+ if(t?.status==='pending'&&t.requestedBy!==me)return res.status(409).json({error:'This member has already sent you a message request. Open your requests to respond.'});
+ if(!t)t={id,users:[me,target].sort(),status:following?'accepted':'pending',requestedBy:following?null:me,blockedBy:[],messages:[],createdAt:Date.now()};
+ if(t.status==='pending'&&t.requestedBy===me&&t.messages.length>=3)return res.status(429).json({error:'Wait for the member to accept your message request before sending more.'});
+ t.messages=[...(t.messages||[]),{id:crypto.randomUUID(),from:me,to:target,text,at:Date.now(),read:false}].slice(-500);t.updatedAt=Date.now();
+ await kvSet(key,t);await dmIndexAdd(me,id);await dmIndexAdd(target,id);res.status(201).json({ok:true,id,status:t.status});
+}));
+app.get('/api/community/dms/:id',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const t=await kvGet(dmThreadKey(req.params.id));if(!t||!t.users?.includes(me))return res.status(404).json({error:'Conversation not found.'});
+ if(t.status==='blocked')return res.status(403).json({error:'This conversation is blocked.'});
+ t.messages=(t.messages||[]).map(m=>m.to===me?{...m,read:true}:m);await kvSet(dmThreadKey(t.id),t);
+ res.json({thread:{id:t.id,other:t.users.find(x=>x!==me),status:t.status,requestedBy:t.requestedBy,messages:t.messages}});
+}));
+app.post('/api/community/dms/:id/accept',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const t=await kvGet(dmThreadKey(req.params.id));if(!t||!t.users?.includes(me))return res.status(404).json({error:'Request not found.'});
+ if(t.status!=='pending'||t.requestedBy===me)return res.status(409).json({error:'There is no incoming request to accept.'});
+ t.status='accepted';t.acceptedAt=Date.now();t.updatedAt=Date.now();await kvSet(dmThreadKey(t.id),t);res.json({ok:true});
+}));
+app.post('/api/community/dms/:id/block',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const t=await kvGet(dmThreadKey(req.params.id));if(!t||!t.users?.includes(me))return res.status(404).json({error:'Conversation not found.'});
+ t.blockedBy=[...new Set([...(t.blockedBy||[]),me])];t.status='blocked';t.updatedAt=Date.now();await kvSet(dmThreadKey(t.id),t);res.json({ok:true});
+}));
+app.post('/api/community/dms/:id/report',h(async(req,res)=>{
+ const me=who(req);if(!me)return res.status(401).json({error:'Login required'});
+ const t=await kvGet(dmThreadKey(req.params.id));if(!t||!t.users?.includes(me))return res.status(404).json({error:'Conversation not found.'});
+ const reason=String(req.body.reason||'').trim().slice(0,300);if(reason.length<5)return res.status(400).json({error:'Please add a short report reason.'});
+ const reports=await kvGet('community:reports')||[];if(reports.some(x=>x.type==='dm'&&x.threadId===t.id&&x.reporter===me))return res.status(409).json({error:'You already reported this conversation.'});
+ reports.unshift({id:crypto.randomUUID(),type:'dm',threadId:t.id,reporter:me,reportedUser:t.users.find(x=>x!==me),reason,createdAt:Date.now()});await kvSet('community:reports',reports.slice(0,500));res.json({ok:true});
 }));
 
 /* Account-based rule polls: one immutable vote per authenticated account. */
