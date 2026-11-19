@@ -175,6 +175,27 @@ body{background:radial-gradient(ellipse at 72% -15%,rgba(124,92,255,.18),transpa
 .studio-options select:focus{border-color:var(--ac)}
 @media(max-width:480px){.studio-options{grid-template-columns:1fr 1fr;gap:8px}.studio-options select{font-size:12px;padding:9px 7px}}
 
+</style><style id="deftai-mobile-overhaul">
+@media(max-width:760px){
+ html,body{width:100%;max-width:100%;overflow:hidden}#main{width:100%;max-width:100%;min-width:0}
+ #top{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 9px 7px;min-height:0}
+ #top .pill{order:0;max-width:112px;min-width:0;white-space:nowrap;overflow:hidden}#top #menu{order:-1;flex:0 0 36px}
+ #top>button[onclick="openSettings()"]{order:1;flex:0 0 34px}#top #focusToggle,#top button[onclick="openShortcuts()"],#top #deviceMode{display:none!important}
+ #top .top-upgrade{order:2;max-width:none;flex:0 0 auto;margin-left:auto}#top #mode{order:3;max-width:94px;min-width:0}
+ #chat{min-width:0;width:100%;padding:10px 10px 14px;overscroll-behavior:contain}#msgs,.wrap{width:100%;min-width:0;max-width:100%}
+ .m,.b,.u{min-width:0;overflow-wrap:anywhere}.b{padding-left:38px}.b pre,.b table{max-width:100%;overflow-x:auto}
+ #box{width:100%;max-width:100%;padding:6px 8px max(9px,env(safe-area-inset-bottom))}#bar{width:100%;max-width:100%;min-width:0;padding:8px;border-radius:18px}
+ #row{width:100%;min-width:0;display:flex;align-items:flex-end;gap:3px}#row>button{flex:0 0 34px;width:34px;min-width:34px;min-height:42px;padding:6px 3px;justify-content:center}
+ #row textarea,#inp{flex:1 1 0;width:0;min-width:0;max-width:100%;min-height:58px;font-size:16px;line-height:1.4;max-height:140px;padding:12px 6px}
+ #composerTools{width:100%;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px}#modelChoice{flex:1 1 110px;min-width:0;max-width:100%}
+ #composerTools label{white-space:nowrap}#composerTools span{display:none!important}
+ .dm-modal{padding:0;align-items:flex-end}.dm-modal-card{width:100%;max-width:100%;max-height:92dvh;border-radius:18px 18px 0 0;padding:14px}
+ .dm-send-form{align-items:stretch}.dm-send-form textarea{font-size:16px;min-height:48px}
+ .community-shell,.community-columns,.community-panel{min-width:0;max-width:100%}.community-heading{flex-wrap:wrap}.community-stats{max-width:100%}
+ .rule-grid{grid-template-columns:1fr}.image-studio-card{width:100%;max-width:100%;max-height:92dvh;overflow:auto}
+}
+@media(max-width:420px){#top{gap:5px;padding-inline:6px}#top .pill{max-width:90px;font-size:10px}#top #mode{max-width:76px;font-size:11px}
+ #top .top-upgrade{padding:6px 8px;font-size:11px}#row>button{flex-basis:31px;width:31px;min-width:31px}#chat{padding-inline:8px}.b{padding-left:35px}}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs><symbol id="i-logo" viewBox="0 0 24 24"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3-1-4-1-7 1-10z"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol><symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol><symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol><symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol><symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol><symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol><symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></symbol><symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol><symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M16 8l4 4-4 4M20 12H9"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol><symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol><symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5"/></symbol><symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m21 16-5-5-9 9"/></symbol></defs></svg>
 <div id="auth"><div class="card">
