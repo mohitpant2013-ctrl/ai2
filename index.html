@@ -163,6 +163,18 @@ body{background:radial-gradient(ellipse at 72% -15%,rgba(124,92,255,.18),transpa
 @media(max-width:760px){#side{background:#0d1320!important}#top{padding:8px 10px;min-height:56px}#chat{padding:18px 12px 24px}.wrap{gap:23px}#box{padding:0 8px max(9px,env(safe-area-inset-bottom))}#bar{border-radius:20px;padding:8px}#empty{margin:9vh auto 0}#empty h1{font-size:26px}.image-studio{padding:10px;align-items:flex-end}.image-studio-card{padding:19px 16px;border-radius:22px 22px 14px 14px}.studio-foot{align-items:flex-start;flex-direction:column}.studio-actions{width:100%;justify-content:space-between}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 
+
+/* DeftAI usability additions */
+#chatTools{display:flex;gap:7px;margin-top:-7px}
+#chatTools button{flex:1;min-width:0;padding:8px 9px;border:1px solid var(--bd);border-radius:9px;background:rgba(255,255,255,.025);color:var(--mu);font-size:11px}
+#chatTools button:hover{border-color:var(--ac);color:var(--tx)}
+.ci{position:relative}.ci-manage{flex:0 0 24px;width:24px;height:24px;padding:0;background:transparent;color:var(--mu);border:0;border-radius:6px;opacity:.7}.ci-manage:hover{background:var(--hv);color:var(--tx);opacity:1}
+.studio-options{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.studio-options label{display:block;font-size:12px;color:#aab5cb}
+.studio-options select{display:block;width:100%;margin-top:6px;padding:10px 11px;border-radius:10px;border:1px solid var(--bd);background:#0b101b;color:var(--tx);font:inherit;font-size:13px;outline:none}
+.studio-options select:focus{border-color:var(--ac)}
+@media(max-width:480px){.studio-options{grid-template-columns:1fr 1fr;gap:8px}.studio-options select{font-size:12px;padding:9px 7px}}
+
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs><symbol id="i-logo" viewBox="0 0 24 24"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3-1-4-1-7 1-10z"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol><symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol><symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol><symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol><symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol><symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol><symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/></symbol><symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol><symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M16 8l4 4-4 4M20 12H9"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol><symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol><symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5"/></symbol><symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m21 16-5-5-9 9"/></symbol></defs></svg>
 <div id="auth"><div class="card">
@@ -189,6 +201,7 @@ body{background:radial-gradient(ellipse at 72% -15%,rgba(124,92,255,.18),transpa
     <div id="projectEditor" hidden style="margin-top:8px"><input id="projectName" maxlength="60" placeholder="Project name"><textarea id="projectMemory" maxlength="4000" rows="6" placeholder="Decisions, current progress, constraints, next steps..."></textarea><small style="display:block;color:var(--mu);font-size:11px;margin:5px 0">Only notes you save here are used as project memory. Max 4,000 characters.</small><button type="button" onclick="saveProjectMemory()" style="width:100%">Save memory</button><button type="button" class="ib" onclick="deleteProject()" style="width:100%;margin-top:5px;color:#f88">Delete project</button><span id="projectStatus" role="status" style="font-size:11px"></span></div>
   </section>
   <button id="new" onclick="newChat();renderList();renderMsgs();$('side').classList.remove('open')"><i data-i="plus"></i> New chat</button>
+  <div id="chatTools"><button type="button" onclick="copyCurrentChat()" title="Copy this conversation">Copy chat</button><button type="button" onclick="exportCurrentChat()" title="Export this conversation as Markdown">Export .md</button></div>
   <input id="chatSearch" type="search" placeholder="⌕ Search chats..." aria-label="Search chats">
   <div id="list"></div>
   <button onclick="openSettings()">⚙ Settings & Personalization</button>
@@ -215,7 +228,7 @@ body{background:radial-gradient(ellipse at 72% -15%,rgba(124,92,255,.18),transpa
       <textarea id="inp" rows="1" placeholder="DeftAI se kuch bhi poochho..."></textarea>
       <button id="stop" class="ib" onclick="ctrl&&ctrl.abort()" title="Stop"><i data-i="stop"></i></button>
       <button id="send" class="ib" onclick="send()" title="Send"><i data-i="up"></i></button>
-    </div><div id="composerTools"><label for="modelChoice">Model</label><select id="modelChoice" aria-label="Choose AI model"><option value="">Loading models…</option></select><button type="button" id="incognitoToggle" class="incognito-toggle" onclick="toggleIncognito()" aria-pressed="false" title="Incognito: chats are not saved">◉ Incognito</button><span id="privacyStatus">DeftAI · Deft-Extra · Groq</span></div></div>
+    </div><div id="composerTools"><label for="modelChoice">Model</label><select id="modelChoice" aria-label="Choose AI model"><option value="">Loading models…</option></select><button type="button" id="promptLibraryBtn" class="incognito-toggle" onclick="openPromptLibrary()" title="Insert a ready-made prompt">✧ Prompts</button><button type="button" id="incognitoToggle" class="incognito-toggle" onclick="toggleIncognito()" aria-pressed="false" title="Incognito: chats are not saved">◉ Incognito</button><span id="privacyStatus">DeftAI · Deft-Extra · Groq</span></div></div>
     <div class="fine">DeftAI galti kar sakta hai. Zaroori baatein sources se check karo.</div></div>
 </div>
 
@@ -226,8 +239,12 @@ body{background:radial-gradient(ellipse at 72% -15%,rgba(124,92,255,.18),transpa
   <div class="studio-head"><div class="studio-mark"><i data-i="image"></i></div><div><h2 id="imageStudioTitle">Create an image</h2><p>Describe the scene. DeftAI will turn your prompt into artwork.</p></div><button class="ib studio-close" onclick="closeImageStudio()" aria-label="Close image creator">✕</button></div>
   <label class="studio-label" for="imagePrompt">Your prompt</label>
   <textarea id="imagePrompt" maxlength="1800" placeholder="A cinematic Minecraft castle floating above the clouds at sunset, detailed voxel art…"></textarea>
+  <div class="studio-options">
+   <label>Aspect ratio<select id="imageAspect"><option value="1:1">Square · 1:1</option><option value="16:9">Landscape · 16:9</option><option value="9:16">Portrait · 9:16</option><option value="3:2">Photo · 3:2</option><option value="2:3">Tall · 2:3</option><option value="4:5">Social · 4:5</option><option value="4:3">Classic · 4:3</option><option value="21:9">Ultrawide · 21:9</option></select></label>
+   <label>Art style<select id="imageStyle"><option value="">Automatic</option><option value="cinematic">Cinematic</option><option value="digital-art">Digital art</option><option value="fantasy-art">Fantasy art</option><option value="photographic">Photographic</option><option value="anime">Anime</option><option value="pixel-art">Pixel art</option><option value="3d-model">3D render</option><option value="comic-book">Comic book</option><option value="isometric">Isometric</option><option value="line-art">Line art</option></select></label>
+  </div>
   <div class="studio-examples"><span>Try:</span><button type="button" onclick="setImagePrompt('A cinematic Minecraft PvP arena at sunset, detailed voxel art')">Minecraft scene</button><button type="button" onclick="setImagePrompt('A cozy futuristic gaming desk with soft purple lighting, concept art')">Gaming setup</button><button type="button" onclick="setImagePrompt('A tiny fantasy village inside a glass bottle, whimsical digital illustration')">Fantasy art</button></div>
-  <div class="studio-foot"><div><b>20 credits</b><small>Powered by Cloudflare FLUX Schnell · beta</small></div><div class="studio-actions"><span id="imageStudioStatus" role="status"></span><button type="button" onclick="closeImageStudio()">Cancel</button><button type="button" class="studio-generate" id="imageGenerateBtn" onclick="runImageGeneration()">✦ Generate</button></div></div>
+  <div class="studio-foot"><div><b>20 credits</b><small>Stability AI · Stable Image Core</small></div><div class="studio-actions"><span id="imageStudioStatus" role="status"></span><button type="button" onclick="closeImageStudio()">Cancel</button><button type="button" class="studio-generate" id="imageGenerateBtn" onclick="runImageGeneration()">✦ Generate</button></div></div>
  </section>
 </div>
 <div id="settingsModal">
@@ -394,10 +411,11 @@ function toggleIncognito(){
 const getChat=()=>chats.find(c=>c.id===cur);
 
 function renderList(){const l=$('list');l.innerHTML='';const q=($('chatSearch')?.value||'').trim().toLowerCase();
-  const shown=chats.filter(c=>!q||c.title.toLowerCase().includes(q)||c.messages.some(m=>String(m.content||m.shown||'').toLowerCase().includes(q)));
+  const shown=[...chats].sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned)).filter(c=>!q||c.title.toLowerCase().includes(q)||c.messages.some(m=>String(m.content||m.shown||'').toLowerCase().includes(q)));
   shown.forEach(c=>{const d=document.createElement('div');d.className='ci'+(c.id===cur?' on':'');
-    d.innerHTML='<span></span><b title="Delete">'+ic('x')+'</b>';d.firstChild.textContent=c.title;
+    d.innerHTML='<span></span><button type="button" class="ci-manage" title="Rename or pin" aria-label="Manage chat">⋯</button><b title="Delete">'+ic('x')+'</b>';d.firstChild.textContent=(c.pinned?'📌 ':'')+c.title;
     d.onclick=()=>{cur=c.id;renderList();renderMsgs();$('side').classList.remove('open')};
+    d.querySelector('.ci-manage').onclick=e=>{e.stopPropagation();manageChat(c.id)};
     d.lastChild.onclick=e=>{e.stopPropagation();if(!confirm('Ye chat delete karni hai?'))return;
       chats=chats.filter(x=>x.id!==c.id);if(!chats.length)newChat();else if(cur===c.id)cur=chats[0].id;save();renderList();renderMsgs()};
     l.appendChild(d)});
@@ -410,7 +428,7 @@ function addMsg(m){const d=document.createElement('div');
     else if(m.imgs){const s=document.createElement('span');s.className='chip';s.innerHTML=ic('image')+m.imgs+' image';d.appendChild(s);d.appendChild(document.createElement('br'))}
     (m.files||[]).forEach(f=>{const s=document.createElement('span');s.className='chip';s.innerHTML=ic('file');s.append(f);d.appendChild(s)});
     d.appendChild(document.createTextNode(m.shown??m.content))}
-  else{d.className='m b';paint(d,m.content,m.sources);if(m.image){const card=document.createElement('div');card.className='generated-image-card';const img=document.createElement('img');img.src=m.image;img.alt='AI-generated artwork';img.loading='lazy';card.appendChild(img);const dl=document.createElement('a');dl.className='image-download';dl.href=m.image;dl.download='deftai-artwork.png';dl.textContent='↓ Save image';card.appendChild(dl);d.appendChild(card)}}
+  else{d.className='m b';paint(d,m.content,m.sources);if(m.image){const card=document.createElement('div');card.className='generated-image-card';const img=document.createElement('img');img.src=m.image;img.alt='AI-generated artwork';img.loading='lazy';card.appendChild(img);const dl=document.createElement('a');dl.className='image-download';dl.href=m.image;dl.download='deftai-artwork.jpg';dl.textContent='↓ Save image';card.appendChild(dl);d.appendChild(card)}}
   $('msgs').appendChild(d);scrollChat();return d}
 function renderMsgs(){const w=$('msgs');w.innerHTML='';const c=getChat();
   if(!c.messages.length)w.innerHTML='<div id="empty"><div class="orb">'+ic('logo')+'</div><h1>Namaste, '+esc(user)+'</h1><p>Main DeftAI hoon, FyreDeft ka banaya hua. Apne curated knowledge documents se jawab de sakta hoon.</p><div class="sug">'+SUG.map(t=>'<button onclick="ask(this.textContent)">'+t+'</button>').join('')+'</div></div>';
@@ -645,6 +663,11 @@ function openImageStudio(){
 }
 function closeImageStudio(){if($('imageGenerateBtn')?.disabled)return;$('imageStudio').classList.remove('open')}
 function setImagePrompt(value){$('imagePrompt').value=value;$('imagePrompt').focus()}
+function chatExportText(){const c=getChat();if(!c)return '';return '# '+(c.title||'DeftAI chat')+'\\n\\n'+c.messages.map(m=>'## '+(m.role==='user'?'You':'DeftAI')+'\\n\\n'+clean(String(m.shown??m.content??''))).join('\\n\\n---\\n\\n')}
+function copyCurrentChat(){const text=chatExportText();if(!text)return alert('This chat is empty.');navigator.clipboard.writeText(text).then(()=>alert('Chat copied.')).catch(()=>alert('Clipboard permission unavailable.'))}
+function exportCurrentChat(){const text=chatExportText();if(!text)return alert('This chat is empty.');downloadAnswer(text,'md')}
+function manageChat(id){const c=chats.find(x=>x.id===id);if(!c)return;const action=prompt('Type "rename" to change its title, or "pin" to keep it at the top.');if(!action)return;if(action.trim().toLowerCase()==='rename'){const name=prompt('New chat title:',c.title||'');if(name&&name.trim())c.title=name.trim().slice(0,80)}else if(action.trim().toLowerCase()==='pin'){c.pinned=!c.pinned}else{return alert('Choose rename or pin.')}save();renderList()}
+function openPromptLibrary(){const prompts=['Explain this step by step in simple language, then give me a short quiz.','Review this code for bugs, security issues, and performance. Show corrected code.','Turn my rough idea into a clear project plan with milestones and next actions.','Summarize the following text into key points and important details.','Act as a patient tutor: ask one question at a time and check my understanding.'];const choice=prompt('Prompt Library\\n\\n1. Study tutor\\n2. Code review\\n3. Project planner\\n4. Summarizer\\n5. Practice quiz\\n\\nEnter 1–5:');const n=Number(choice);if(!Number.isInteger(n)||n<1||n>5)return;$('inp').value=prompts[n-1];$('inp').focus()}
 async function runImageGeneration(){
  const promptText=$('imagePrompt').value.trim();
  if(promptText.length<3){$('imageStudioStatus').textContent='Please describe your image first.';$('imagePrompt').focus();return}
@@ -653,7 +676,7 @@ async function runImageGeneration(){
  const pending=addMsg({role:'assistant',content:''});pending.innerHTML=IMAGE_TYP+'<small class="studio-progress">This can take a little while.</small>';
  $('imageStudio').classList.remove('open');
  try{
-  const r=await api('/api/image',{method:'POST',body:JSON.stringify({prompt:promptText})}),j=await r.json().catch(()=>({}));
+  const r=await api('/api/image',{method:'POST',body:JSON.stringify({prompt:promptText,aspectRatio:$('imageAspect')?.value||'1:1',style:$('imageStyle')?.value||''})}),j=await r.json().catch(()=>({}));
   if(!r.ok)throw Error(j.error||'Image generation failed');
   const m={role:'assistant',content:'Image created · '+j.cost+' credits',image:j.image};
   c.messages.push(m);pending.remove();addMsg(m);actions(c);save();await loadStore();
