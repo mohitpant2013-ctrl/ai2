@@ -336,7 +336,7 @@ function paint(d,t,src){
   d.querySelectorAll('pre').forEach(p=>{const b=document.createElement('button');b.className='cp';b.textContent='Copy';
     b.onclick=()=>{navigator.clipboard.writeText((p.querySelector('code')||p).innerText);b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1200)};p.appendChild(b)})}
 
-const slim=()=>chats.map(c=>({id:c.id,title:c.title,messages:c.messages.map(m=>({role:m.role,content:m.content,shown:m.shown,files:m.files,imgs:Array.isArray(m.imgs)?m.imgs.length:m.imgs,sources:m.sources}))}));
+const slim=()=>chats.map(c=>({id:c.id,title:c.title,pinned:!!c.pinned,messages:c.messages.map(m=>({role:m.role,content:m.content,shown:m.shown,files:m.files,imgs:Array.isArray(m.imgs)?m.imgs.length:m.imgs,sources:m.sources}))}));
 const api=(p,o={})=>fetch(p,{...o,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token}});
 let st_t;
 function save(){if(incognitoMode){if($('syncStatus'))$('syncStatus').textContent='Incognito · not saved';return}clearTimeout(st_t);if($('syncStatus'))$('syncStatus').textContent='Saving…';st_t=setTimeout(async()=>{const d=slim();while(JSON.stringify(d).length>900000&&d.length>1)d.pop();
