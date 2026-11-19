@@ -305,7 +305,8 @@ async function userCredits(username){let c=await kvGet('credits:'+username);if(!
 const creditQueues=new Map();
 async function withCreditLock(username,fn){const previous=creditQueues.get(username)||Promise.resolve();let release;const current=new Promise(resolve=>release=resolve);creditQueues.set(username,current);await previous;try{return await fn()}finally{release();if(creditQueues.get(username)===current)creditQueues.delete(username)}}
 async function spendCredits(username,amount,reason){return withCreditLock(username,async()=>{const c=await userCredits(username);if(c.balance<amount)throw new Error('INSUFFICIENT_CREDITS');c.balance-=amount;c.updatedAt=Date.now();await kvSet('credits:'+username,c);await recordCreditEvent(username,-amount,reason,c.balance);return c})}
-async function addCredits(username,amount,reason){return withCreditLock(username,async()=>{const c=await userCredits(username);c.balance=Math.max(0,Math.min(10000000,c.balance+amount));c.updatedAt=Date.now();await kvSet('credits:'+username,c);await recordCreditEvent(username,amount,reason,c.balance);return c})}
+async function applyCreditDelta(username,amount,reason){return withCreditLock(username,async()=>{const c=await userCredits(username),before=Number(c.balance)||0;c.balance=Math.max(0,Math.min(10000000,before+amount));const actual=c.balance-before;c.updatedAt=Date.now();await kvSet('credits:'+username,c);if(actual)await recordCreditEvent(username,actual,reason,c.balance);return c})}
+async function addCredits(username,amount,reason){return applyCreditDelta(username,amount,reason)}
 async function recordCreditEvent(username,delta,reason,balance){
  const key='credit-ledger:'+username,items=(await kvGet(key))||[];
  items.unshift({id:crypto.randomUUID(),at:Date.now(),delta,reason:String(reason||'Credit update').slice(0,100),balance});
@@ -348,7 +349,7 @@ app.post('/api/admin/credits',h(async(req,res)=>{
  if(!adminOnly(req,res))return;const username=String(req.body.username||'').toLowerCase(),amount=Math.floor(Number(req.body.amount)||0);
  if(!username||!Number.isFinite(amount)||amount===0||Math.abs(amount)>1000000)return res.status(400).json({error:'Valid username and non-zero credit amount required.'});
  if(!await kvGet('u:'+username))return res.status(404).json({error:'User not found.'});
- const c=await userCredits(username);c.balance=Math.max(0,Math.min(10000000,c.balance+amount));c.updatedAt=Date.now();await kvSet('credits:'+username,c);await recordCreditEvent(username,amount,'Owner adjustment',c.balance);res.json({ok:true,credits:c});
+ const c=await applyCreditDelta(username,amount,'Owner adjustment');res.json({ok:true,credits:c});
 }));
 
 const AZURE_SPEECH_KEY=process.env.AZURE_SPEECH_KEY||'',AZURE_SPEECH_REGION=process.env.AZURE_SPEECH_REGION||'centralindia';
@@ -587,15 +588,17 @@ app.post('/api/chat', async (req, res) => {
   });
 
   const ownerForCredits=who(req),accountRecord=await kvGet('u:'+ownerForCredits);if(!accountRecord)return res.status(401).json({error:'Account not found. Please sign in again.'});const creditState=await userCredits(ownerForCredits);
-  if(creditState.balance<1)return res.status(402).json({error:'You are out of credits. Open Plans to request more.'});
+  if(creditState.balance<1)return res.status(402).json({error:'INSUFFICIENT_CREDITS',message:'You are out of credits. Open Plans to request more.'});
+  let creditReserved=false;
   const ctrl = new AbortController();
   res.on('close', () => ctrl.abort());
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   const send = o => res.write('data: ' + JSON.stringify(o) + '\n\n');
+  const refundChatCredit=async(reason)=>{if(creditReserved){creditReserved=false;await addCredits(ownerForCredits,1,reason||'Chat response refund · request failed')}};
 
   try {
-
+    await spendCredits(ownerForCredits,1,'Chat response');creditReserved=true;
     let srcText = '';
     const last = [...history].reverse().find(m => m.role === 'user');
     const lastText = typeof last?.content === 'string' ? last.content : (last?.content || []).find(p => p.type === 'text')?.text || '';
@@ -636,23 +639,23 @@ app.post('/api/chat', async (req, res) => {
     const systemText=sysPrompt(promptModel, srcText, req.body.mode, [settings.systemPrompt,personalContext,projectContext].filter(Boolean).join('\n'));
     let r;
     if(activeModel.startsWith('gpt-')){
-      if(!OPENAI_API_KEY){send({error:'PROVIDER_ERROR',message:'OpenAI model selected but OPENAI_API_KEY is missing in Render environment variables.'});return res.end();}
+      if(!OPENAI_API_KEY){await refundChatCredit('Chat refund · OpenAI key missing');send({error:'PROVIDER_ERROR',message:'OpenAI model selected but OPENAI_API_KEY is missing in Render environment variables.'});return res.end();}
       const or=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+OPENAI_API_KEY},body:JSON.stringify({model:activeModel,messages:[{role:'system',content:systemText},...history],stream:true,max_completion_tokens:maxTokens})});
-      if(!or.ok){const detail=await or.text();console.error('OpenAI request failed:',or.status,detail.slice(0,350));send({error:'PROVIDER_ERROR',message:'OpenAI request failed (HTTP '+or.status+'). Check API key, model access and billing.'});return res.end();}
+      if(!or.ok){const detail=await or.text();await refundChatCredit('Chat refund · OpenAI provider error');console.error('OpenAI request failed:',or.status,detail.slice(0,350));send({error:'PROVIDER_ERROR',message:'OpenAI request failed (HTTP '+or.status+'). Check API key, model access and billing.'});return res.end();}
       const decoder=new TextDecoder();let pending='',assistantText='';
       for await(const chunk of or.body){res.write(chunk);pending+=decoder.decode(chunk,{stream:true});const frames=pending.split(/\r?\n/);pending=frames.pop()||'';for(const line of frames){if(!line.startsWith('data:'))continue;const data=line.slice(5).trim();if(!data||data==='[DONE]')continue;try{const part=JSON.parse(data)?.choices?.[0]?.delta?.content;if(typeof part==='string')assistantText=(assistantText+part).slice(-10000)}catch{}}}
-      if(!assistantText.trim()){send({error:'PROVIDER_ERROR',message:'OpenAI returned no text. No credits were deducted.'});return res.end()}
-      await spendCredits(ownerForCredits,1,'Successful chat response');
+      if(!assistantText.trim()){await refundChatCredit('Chat refund · empty OpenAI response');send({error:'PROVIDER_ERROR',message:'OpenAI returned no text. No credits were deducted.'});return res.end()}
+      creditReserved=false;
       const prefs=await getUserPreferences(ownerForCredits);
       await appendAudit(prefs.auditConsent===true?{type:'chat',username:ownerForCredits,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:assistantText}:{type:'chat_activity',username:ownerForCredits,detail:'Chat request completed; transcript not stored (no consent)'});
       return res.end();
     }
     if(activeModel.startsWith('gemini-')){
-      if(!GEMINI_API_KEY){send({error:'PROVIDER_ERROR',message:'Gemini is selected but GEMINI_API_KEY is missing in Render environment variables.'});return res.end();}
+      if(!GEMINI_API_KEY){await refundChatCredit('Chat refund · Gemini key missing');send({error:'PROVIDER_ERROR',message:'Gemini is selected but GEMINI_API_KEY is missing in Render environment variables.'});return res.end();}
       const contents=history.map(m=>({role:m.role==='assistant'?'model':'user',parts:Array.isArray(m.content)?m.content.map(p=>{if(p.type==='text')return {text:p.text||''};if(p.type==='image_url'){const raw=p.image_url?.url||'',match=raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);return match?{inlineData:{mimeType:match[1],data:match[2]}}:{text:'[Image omitted: unsupported URL format]'}}return {text:''}}):[{text:String(m.content||'')}]}));
       const endpoint='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(activeModel)+':streamGenerateContent?alt=sse';
       const gr=await fetch(endpoint,{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json','x-goog-api-key':GEMINI_API_KEY},body:JSON.stringify({systemInstruction:{parts:[{text:systemText}]},contents,generationConfig:{temperature:creativeRequest?0.88:0.65,maxOutputTokens:maxTokens}})});
-      if(!gr.ok){const gj=await gr.json().catch(()=>({})),detail=String(gj.error?.message||'No provider detail returned').slice(0,240),code=gj.error?.status||gj.error?.code||'UNKNOWN';console.error('Gemini request failed:',gr.status,code,detail);send({error:'PROVIDER_ERROR',message:'Gemini error '+gr.status+' ('+code+'): '+detail});return res.end();}
+      if(!gr.ok){const gj=await gr.json().catch(()=>({})),detail=String(gj.error?.message||'No provider detail returned').slice(0,240),code=gj.error?.status||gj.error?.code||'UNKNOWN';console.error('Gemini request failed:',gr.status,code,detail);await refundChatCredit('Chat refund · Gemini provider error');send({error:'PROVIDER_ERROR',message:'Gemini error '+gr.status+' ('+code+'): '+detail});return res.end();}
       let pending='',assistantText='';const decoder=new TextDecoder();
       for await(const chunk of gr.body){
         pending+=decoder.decode(chunk,{stream:true});
@@ -667,8 +670,8 @@ app.post('/api/chat', async (req, res) => {
         }
       }
       if(pending.startsWith('data:')){try{const parts=JSON.parse(pending.slice(5).trim())?.candidates?.[0]?.content?.parts||[];for(const part of parts){if(typeof part.text==='string'&&part.text){assistantText=(assistantText+part.text).slice(-12000);send({choices:[{delta:{content:part.text}}]})}}}catch{}}
-      if(!assistantText.trim()){send({error:'PROVIDER_ERROR',message:'Gemini returned no text. Check the selected model and API usage limits.'});return res.end();}
-      await spendCredits(ownerForCredits,1,'Successful chat response');
+      if(!assistantText.trim()){await refundChatCredit('Chat refund · empty Gemini response');send({error:'PROVIDER_ERROR',message:'Gemini returned no text. Check the selected model and API usage limits.'});return res.end();}
+      creditReserved=false;
       const prefs=await getUserPreferences(ownerForCredits);
       appendAudit(prefs.auditConsent===true?{type:'chat',username:ownerForCredits,detail:'User message and AI reply (consented)',userMessage:String(lastText).slice(0,6000),assistantReply:assistantText}:{type:'chat_activity',username:ownerForCredits,detail:'Chat request completed; transcript not stored (no consent)'}).catch(e=>console.warn('Chat audit skipped:',e.message));
       return res.end();
@@ -677,6 +680,7 @@ app.post('/api/chat', async (req, res) => {
       { messages: [{ role: 'system', content: systemText }, ...history], stream: true, temperature: creativeRequest ? 0.88 : 0.65, max_completion_tokens: maxTokens },
       hasImg ? [...new Set([activeVision, ...FALLBACK])] : [activeModel], ctrl.signal, settings.reasoningEffort || 'medium');
     if (!r.ok) {
+      await refundChatCredit('Chat refund · Groq provider error');
       const raw = await r.text();
       if (r.status === 429 || /rate.?limit|tokens per minute|quota/i.test(raw)) {
         send({ error: 'PROVIDER_LIMIT', message: 'AI provider is temporarily at its usage limit. Alternate models are busy too; please retry shortly.' });
@@ -702,7 +706,7 @@ app.post('/api/chat', async (req, res) => {
         } catch {}
       }
     }
-    if(assistantText.trim())await spendCredits(ownerForCredits,1,'Successful chat response');
+    if(assistantText.trim())creditReserved=false;else await refundChatCredit('Chat refund · empty Groq response');
     const account=who(req);
     if(account) {
       const prefs=await getUserPreferences(account);
@@ -714,6 +718,7 @@ app.post('/api/chat', async (req, res) => {
     }
     res.end();
   } catch (e) {
+    try { await refundChatCredit('Chat refund · request interrupted or failed'); } catch(refundError) { console.error('Credit refund failed:',refundError.message); }
     try { send({ error: String(e).slice(0, 200) }); } catch {}
     res.end();
   }
