@@ -437,7 +437,7 @@ async function forgotPassword(){
   $('aerr').textContent='Password reset. Sign in with your new password.';
  }catch(e){$('aerr').textContent=e.message}
 }
-function logout(){token='';localStorage.removeItem('deft_token');chats=[];$('auth').style.display='flex'}
+function logout(){token='';localStorage.removeItem('deft_token');chats=[];currentPage='chat';communityData=null;$('box').style.display='';$('auth').style.display='flex'}
 async function start(){if(!(await load()))return;startCommunityHeartbeat();await loadPreferences();await loadProjects();await loadStore();$('auth').style.display='none';$('uname').textContent=user;$('av').textContent=user[0].toUpperCase();
   if(!chats.length)newChat();else cur=chats[0].id;renderList();renderMsgs();const draft=localStorage.getItem('deft_draft_'+user);if(draft&&!$('inp').value)$('inp').value=draft;
 }
@@ -525,6 +525,7 @@ function renderCommunityMarkup(){
  $('msgs').querySelectorAll('[data-follow]').forEach(b=>b.addEventListener('click',()=>toggleFollow(b.dataset.follow)));
  $('msgs').querySelectorAll('[data-like]').forEach(b=>b.addEventListener('click',()=>likeCommunityProject(b.dataset.like)));
  $('msgs').querySelectorAll('[data-remove]').forEach(b=>b.addEventListener('click',()=>removeCommunityProject(b.dataset.remove)));
+ $('msgs').querySelectorAll('[data-report]').forEach(b=>b.addEventListener('click',()=>reportCommunityProject(b.dataset.report)));
  $('publishExistingBtn')?.addEventListener('click',publishExistingProject);
 }
 function projectsLocal(){return projects}
@@ -544,6 +545,11 @@ async function toggleFollow(username){
 }
 async function likeCommunityProject(id){
  try{const r=await api('/api/community/projects/'+encodeURIComponent(id)+'/like',{method:'POST',body:'{}'});const j=await r.json();if(!r.ok)throw Error(j.error);await refreshCommunity()}
+ catch(e){alert(e.message)}
+}
+async function reportCommunityProject(id){
+ const reason=prompt('Why should this project be reviewed?');if(!reason||reason.trim().length<5)return;
+ try{const r=await api('/api/community/projects/'+encodeURIComponent(id)+'/report',{method:'POST',body:JSON.stringify({reason})});const j=await r.json();if(!r.ok)throw Error(j.error);alert('Report submitted for review. Thank you.')}
  catch(e){alert(e.message)}
 }
 async function removeCommunityProject(id){
