@@ -420,7 +420,8 @@ const AZURE_SPEECH_KEY=process.env.AZURE_SPEECH_KEY||'',AZURE_SPEECH_REGION=proc
 app.get('/api/voice-status',(req,res)=>res.json({punjabiCloud:!!AZURE_SPEECH_KEY,voice:'pa-IN-OjasNeural'}));
 app.post('/api/tts',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
- if(!AZURE_SPEECH_KEY)return res.status(503).json({error:'Cloud Punjabi voice is not configured. Add AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in Render.'});\n if(!allowScoped('tts',u,12,60000))return res.status(429).json({error:'Voice rate limit reached. Please wait a minute.'});
+ if(!AZURE_SPEECH_KEY)return res.status(503).json({error:'Cloud Punjabi voice is not configured. Add AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in Render.'});
+ if(!allowScoped('tts',u,12,60000))return res.status(429).json({error:'Voice rate limit reached. Please wait a minute.'});
  const text=String(req.body.text||'').trim().slice(0,3500);if(!text)return res.status(400).json({error:'Text required.'});
  const voice=req.body.voice==='female'?'pa-IN-VaaniNeural':'pa-IN-OjasNeural';
  const esc=v=>v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
@@ -434,7 +435,8 @@ app.post('/api/image',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
  const accountId=process.env.CLOUDFLARE_ACCOUNT_ID||'',apiToken=process.env.CLOUDFLARE_API_TOKEN||'';
  if(!accountId||!apiToken)return res.status(503).json({error:'Image generation is not configured. Add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in Render.'});
- if(!allowScoped('image',u,5,3600000))return res.status(429).json({error:'Image generation limit reached for this hour. Please try later.'});\n const rawPrompt=String(req.body.prompt||'').trim().slice(0,2000);if(rawPrompt.length<3)return res.status(400).json({error:'Describe the image first.'});
+ if(!allowScoped('image',u,5,3600000))return res.status(429).json({error:'Image generation limit reached for this hour. Please try later.'});
+ const rawPrompt=String(req.body.prompt||'').trim().slice(0,2000);if(rawPrompt.length<3)return res.status(400).json({error:'Describe the image first.'});
  // Add clarifying context to clearly fictional, ordinary game-art prompts that image models may misread.
  // This is not a moderation bypass: provider safety checks remain enabled and authoritative.
  const hasSensitiveTerms=/\b(nsfw|nude|nudity|explicit|porn|sexual|erotic|fetish)\b/i.test(rawPrompt);
@@ -614,7 +616,8 @@ app.post('/api/projects',h(async(req,res)=>{
  const projects=(await kvGet('projects:'+u))||[];
  const name=String(req.body.name||'').trim().slice(0,60);
  if(!name)return res.status(400).json({error:'Project name required'});
- if(projects.length>=20)return res.status(400).json({error:'Maximum 20 projects'});\n  if(projects.some(x=>String(x.name||'').toLowerCase()===name.toLowerCase()))return res.status(409).json({error:'A project with this name already exists.'});
+ if(projects.length>=20)return res.status(400).json({error:'Maximum 20 projects'});
+  if(projects.some(x=>String(x.name||'').toLowerCase()===name.toLowerCase()))return res.status(409).json({error:'A project with this name already exists.'});
  const p={id:crypto.randomUUID(),name,memory:'',updatedAt:Date.now()};
  projects.unshift(p);await kvSet('projects:'+u,projects);res.json({project:p,projects});
 }));
