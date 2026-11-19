@@ -6,7 +6,7 @@ app.use(express.json({ limit: '12mb' }));
 app.use((req,res,next)=>{
  if(req.path.startsWith('/api/')&&req.path!=='/api/admin/live-logs'){
   const started=Date.now();
-  res.on('finish',()=>console.info('[http]',req.method,req.path,res.statusCode,(Date.now()-started)+'ms'));
+  res.on('finish',()=>console.info('[http]',req.requestId||'-',req.method,req.path,res.statusCode,(Date.now()-started)+'ms'));
  }
  next();
 });
@@ -32,6 +32,17 @@ async function sendAuthEmail(to,subject,html){
  if(!r.ok){const body=await r.text();console.error('Email provider error:',r.status,body.slice(0,250));throw new Error('Email could not be sent. Check sender/domain configuration.');}
 }
 const crypto = require('crypto');
+// Backend hardening: request correlation, safe defaults, and API cache isolation.
+app.use((req,res,next)=>{
+ req.requestId=crypto.randomUUID();
+ res.setHeader('X-Request-ID',req.requestId);
+ res.setHeader('X-Content-Type-Options','nosniff');
+ res.setHeader('X-Frame-Options','DENY');
+ res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');
+ res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=()');
+ if(req.path.startsWith('/api/'))res.setHeader('Cache-Control','no-store, max-age=0');
+ next();
+});
 
 const liveLogBuffer=[],liveLogClients=new Set();
 function cleanLogValue(value){let out;try{out=typeof value==='string'?value:JSON.stringify(value)}catch{out=String(value)}return String(out||'').replace(/(Bearer\s+)[A-Za-z0-9._-]+/gi,'$1[REDACTED]').replace(/(api[_-]?key|token|password|secret)(["'\s:=]+)[^"'\s,}]+/gi,'$1$2[REDACTED]').slice(0,1200);}
@@ -312,13 +323,66 @@ async function recordCreditEvent(username,delta,reason,balance){
  items.unshift({id:crypto.randomUUID(),at:Date.now(),delta,reason:String(reason||'Credit update').slice(0,100),balance});
  await kvSet(key,items.slice(0,100));
 }
+app.get('/api/me',h(async(req,res)=>{
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
+ const account=await kvGet('u:'+u);if(!account)return res.status(404).json({error:'Account not found'});
+ const credits=await userCredits(u);
+ res.json({username:account.name,email:account.email||'',createdAt:account.at||null,credits:credits.balance,plan:credits.plan||'Free',joinedAt:account.at||null});
+}));
+app.get('/api/credits',h(async(req,res)=>{
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
+ const c=await userCredits(u),history=(await kvGet('credit-ledger:'+u)||[]).slice(0,20);
+ res.json({balance:c.balance,plan:c.plan||'Free',updatedAt:c.updatedAt||null,history});
+}));
+app.get('/api/usage',h(async(req,res)=>{
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
+ const ledger=(await kvGet('credit-ledger:'+u)||[]),since=Date.now()-7*864e5;
+ const recent=ledger.filter(x=>x.at>=since),spent=recent.filter(x=>x.delta<0).reduce((n,x)=>n+Math.abs(x.delta),0),earned=recent.filter(x=>x.delta>0).reduce((n,x)=>n+x.delta,0);
+ res.json({period:'7d',creditsSpent:spent,creditsAdded:earned,transactions:recent.length,totalTransactions:ledger.length,latest:ledger.slice(0,10)});
+}));
+app.get('/api/activity',h(async(req,res)=>{
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
+ const events=(await kvGet('audit:events')||[]).filter(x=>x.username===u).slice(0,30).map(({id,at,type,detail})=>({id,at,type,detail}));
+ res.json({events});
+}));
+app.delete('/api/chats',h(async(req,res)=>{
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
+ await kvSet('c:'+u,[]);await appendAudit({type:'chat_history_cleared',username:u,detail:'User cleared saved chat history'});
+ res.json({ok:true,cleared:true});
+}));
+app.get('/api/admin/metrics',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;
+ const users=Object.keys(mem).filter(k=>k.startsWith('u:'));
+ let totalCredits=0,paidUsers=0;
+ for(const key of users){const c=mem['credits:'+key.slice(2)]||{balance:300,plan:'Free'};totalCredits+=Number(c.balance)||0;if(c.plan&&c.plan!=='Free')paidUsers++}
+ const requests=(await kvGet('purchase:requests'))||[],events=(await kvGet('audit:events'))||[];
+ res.json({users:users.length,totalCredits,paidUsers,pendingPurchases:requests.filter(x=>x.status==='pending').length,eventsLast24h:events.filter(x=>x.at>Date.now()-864e5).length,storage:pool&&databaseReady?'postgres':diskMounted()?'persistent-disk':'ephemeral',databaseReady});
+}));
+app.get('/api/admin/health',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;
+ const checks={storage:!saveError,database:!pool||databaseReady,groqConfigured:!!KEY,geminiConfigured:!!GEMINI_API_KEY,openaiConfigured:!!OPENAI_API_KEY,imageConfigured:!!(process.env.CLOUDFLARE_ACCOUNT_ID&&process.env.CLOUDFLARE_API_TOKEN),emailConfigured:!!RESEND_API_KEY,voiceConfigured:!!AZURE_SPEECH_KEY};
+ res.json({ok:Object.values(checks).every(Boolean),checks,uptimeSeconds:Math.floor(process.uptime()),memory:process.memoryUsage(),node:process.version});
+}));
+app.get('/api/admin/credit-ledger/:username',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;
+ const u=String(req.params.username||'').toLowerCase();
+ if(!await kvGet('u:'+u))return res.status(404).json({error:'User not found'});
+ res.json({username:u,history:(await kvGet('credit-ledger:'+u)||[]).slice(0,100)});
+}));
+app.get('/api/admin/user/:username',h(async(req,res)=>{
+ if(!adminOnly(req,res))return;
+ const u=String(req.params.username||'').toLowerCase(),account=await kvGet('u:'+u);
+ if(!account)return res.status(404).json({error:'User not found'});
+ const credits=await userCredits(u),prefs=await getUserPreferences(u);
+ res.json({user:{username:account.name,email:account.email||'',createdAt:account.at||null,credits:credits.balance,plan:credits.plan||'Free',preferences:{language:prefs.language,tone:prefs.tone}},recentCredits:(await kvGet('credit-ledger:'+u)||[]).slice(0,10)});
+}));
 app.get('/api/credits/history',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
  res.json({history:(await kvGet('credit-ledger:'+u)||[]).slice(0,30)});
 }));
 app.get('/api/store',h(async(req,res)=>{const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const cfg=await getCommerce(),settings=await getSettings(),credits=await userCredits(u);res.json({plans:(cfg.plans||[]).filter(p=>p.active),contact:cfg.contact,credits,creditHistory:(await kvGet('credit-ledger:'+u)||[]).slice(0,12),models:settings.allowedModels||[settings.model||MODEL]});}));
 app.post('/api/purchase-request',h(async(req,res)=>{
- const u=who(req);if(!u)return res.status(401).json({error:'Login required'});const id=String(req.body.planId||''),cfg=await getCommerce(),plan=(cfg.plans||[]).find(p=>p.id===id&&p.active);
+ const u=who(req);if(!u)return res.status(401).json({error:'Login required'});if(!allowScoped('purchase',u,3,86400000))return res.status(429).json({error:'Purchase request limit reached. Try again tomorrow.'});const id=String(req.body.planId||''),cfg=await getCommerce(),plan=(cfg.plans||[]).find(p=>p.id===id&&p.active);
  if(!plan)return res.status(404).json({error:'Plan not found or unavailable.'});
  const requests=(await kvGet('purchase:requests'))||[],existing=requests.find(x=>x.username===u&&x.planId===id&&x.status==='pending');
  if(existing)return res.json({ok:true,requestId:existing.id,reference:existing.reference,plan:{name:existing.planName,price:existing.price,credits:existing.credits},paymentStatus:existing.paymentStatus||'awaiting_manual_review',contact:cfg.contact,alreadyPending:true});
@@ -356,7 +420,7 @@ const AZURE_SPEECH_KEY=process.env.AZURE_SPEECH_KEY||'',AZURE_SPEECH_REGION=proc
 app.get('/api/voice-status',(req,res)=>res.json({punjabiCloud:!!AZURE_SPEECH_KEY,voice:'pa-IN-OjasNeural'}));
 app.post('/api/tts',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
- if(!AZURE_SPEECH_KEY)return res.status(503).json({error:'Cloud Punjabi voice is not configured. Add AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in Render.'});
+ if(!AZURE_SPEECH_KEY)return res.status(503).json({error:'Cloud Punjabi voice is not configured. Add AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in Render.'});\n if(!allowScoped('tts',u,12,60000))return res.status(429).json({error:'Voice rate limit reached. Please wait a minute.'});
  const text=String(req.body.text||'').trim().slice(0,3500);if(!text)return res.status(400).json({error:'Text required.'});
  const voice=req.body.voice==='female'?'pa-IN-VaaniNeural':'pa-IN-OjasNeural';
  const esc=v=>v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
@@ -370,7 +434,7 @@ app.post('/api/image',h(async(req,res)=>{
  const u=who(req);if(!u)return res.status(401).json({error:'Login required'});
  const accountId=process.env.CLOUDFLARE_ACCOUNT_ID||'',apiToken=process.env.CLOUDFLARE_API_TOKEN||'';
  if(!accountId||!apiToken)return res.status(503).json({error:'Image generation is not configured. Add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in Render.'});
- const rawPrompt=String(req.body.prompt||'').trim().slice(0,2000);if(rawPrompt.length<3)return res.status(400).json({error:'Describe the image first.'});
+ if(!allowScoped('image',u,5,3600000))return res.status(429).json({error:'Image generation limit reached for this hour. Please try later.'});\n const rawPrompt=String(req.body.prompt||'').trim().slice(0,2000);if(rawPrompt.length<3)return res.status(400).json({error:'Describe the image first.'});
  // Add clarifying context to clearly fictional, ordinary game-art prompts that image models may misread.
  // This is not a moderation bypass: provider safety checks remain enabled and authoritative.
  const hasSensitiveTerms=/\b(nsfw|nude|nudity|explicit|porn|sexual|erotic|fetish)\b/i.test(rawPrompt);
@@ -453,6 +517,15 @@ app.get('/api/status', async (req, res) => {
 });
 
 const hits = new Map();
+const scopedLimits=new Map();
+function allowScoped(scope,key,max,windowMs){
+ const now=Date.now(),id=scope+':'+String(key||'unknown');
+ const recent=(scopedLimits.get(id)||[]).filter(t=>now-t<windowMs);
+ if(recent.length>=max){scopedLimits.set(id,recent);return false}
+ recent.push(now);scopedLimits.set(id,recent);
+ if(scopedLimits.size>5000){for(const [k,v] of scopedLimits){if(!v.length||now-v[v.length-1]>windowMs)scopedLimits.delete(k)}}
+ return true;
+}
 const limited = ip => {
   const now = Date.now(), a = (hits.get(ip) || []).filter(t => now - t < 60000);
   a.push(now); hits.set(ip, a);
@@ -541,7 +614,7 @@ app.post('/api/projects',h(async(req,res)=>{
  const projects=(await kvGet('projects:'+u))||[];
  const name=String(req.body.name||'').trim().slice(0,60);
  if(!name)return res.status(400).json({error:'Project name required'});
- if(projects.length>=20)return res.status(400).json({error:'Maximum 20 projects'});
+ if(projects.length>=20)return res.status(400).json({error:'Maximum 20 projects'});\n  if(projects.some(x=>String(x.name||'').toLowerCase()===name.toLowerCase()))return res.status(409).json({error:'A project with this name already exists.'});
  const p={id:crypto.randomUUID(),name,memory:'',updatedAt:Date.now()};
  projects.unshift(p);await kvSet('projects:'+u,projects);res.json({project:p,projects});
 }));
@@ -566,14 +639,14 @@ app.get('/api/chats', h(async (req, res) => {
 app.put('/api/chats', h(async (req, res) => {
   const u = who(req); if (!u) return res.status(401).json({ error: 'Login karo' });
   const c = req.body.chats;
-  if (!Array.isArray(c) || JSON.stringify(c).length > 950000) return res.status(413).json({ error: 'Chats bahut badi hain' });
+  if (!Array.isArray(c) || c.length>100 || JSON.stringify(c).length > 950000) return res.status(413).json({ error: 'Chats bahut badi hain ya chat count limit cross ho gayi hai' });
   await kvSet('c:' + u, c); res.json({ ok: true });
 }));
 
 app.post('/api/chat', async (req, res) => {
   if (!who(req)) return res.status(401).json({ error: 'Login karo' });
   if (!KEY&&!GEMINI_API_KEY&&!OPENAI_API_KEY) return res.status(503).json({ error: 'Add at least one provider key: GROQ_API_KEY, GEMINI_API_KEY or OPENAI_API_KEY.' });
-  if (limited(req.ip)) return res.status(429).json({ error: 'Too many requests' });
+  if (limited(req.ip)||!allowScoped('chat-user',who(req),30,60000)) return res.status(429).json({ error: 'Too many requests' });
 
   let hasImg = false;
   const history = (Array.isArray(req.body.messages) ? req.body.messages : []).slice(-7).map((m,index,arr) => {
@@ -724,4 +797,11 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+app.use((err,req,res,next)=>{
+ if(res.headersSent)return next(err);
+ if(err&&err.type==='entity.too.large')return res.status(413).json({error:'Request payload too large.'});
+ if(err instanceof SyntaxError&&err.status===400&&'body'in err)return res.status(400).json({error:'Invalid JSON request body.'});
+ console.error('[request-error]',req.requestId||'-',err?.message||'Unknown error');
+ res.status(500).json({error:'Internal server error.',requestId:req.requestId||null});
+});
 initStore().then(()=>{app.listen(process.env.PORT||3000,()=>console.log('DeftAI running · '+(pool?'PostgreSQL':diskMounted()?'persistent disk':'ephemeral storage')))}).catch(e=>{console.error('Database initialization failed:',e.message);process.exit(1)});
