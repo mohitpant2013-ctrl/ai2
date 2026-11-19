@@ -247,7 +247,7 @@ async function makeQuery(history, lastText) {
       if (q) return q.toUpperCase() === 'NONE' ? null : q.slice(0, 120);
     }
   } catch {}
-  return /\b(release|released|launch|launched|available|current|latest|today|date|price|version|update|schedule|result|winner|who is|what happened|when did|202[4-9])\b/i.test(lastText) ? String(lastText).slice(0,120) : null;
+  return /\b(release|released|launch|launched|available|current|latest|today|date|price|version|update|schedule|result|winner|who is|what happened|when did|202[4-9]|minecraft|elytra|redstone|nether|enderman|warden|creeper|villager|mace|wind charge|diamond|netherite|enchantments?|how does|how do|what is|what are|why does|why do|how many|who invented|who created)\b/i.test(lastText) ? String(lastText).slice(0,120) : null;
 }
 
 const ok = x => (x.status === 'fulfilled' ? x.value : []);
