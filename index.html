@@ -728,8 +728,8 @@ async function go(){
     paint(bd,full,srcs);scrollChat();c.messages.push({role:'assistant',content:full,sources:srcs});actions(c);
   }catch(e){
     if(e.name==='AbortError'){if(full)c.messages.push({role:'assistant',content:full+' _[stopped]_'});paint(bd,full+' _[stopped]_',srcs)}
-    else{const m=e.message==='AUTH'?'Your session expired. Please sign in again.':e.message.includes('This account is disabled')?'This account is currently disabled. The owner must review its status and re-enable it before sign-in can continue.':e.message==='RATE'?'You're sending messages too quickly. Please wait a moment and try again.':
-      e.message==='INSUFFICIENT_CREDITS'?'You've run out of credits. Open Plans to review your balance and options.':
+    else{const m=e.message==='AUTH'?'Your session expired. Please sign in again.':e.message.includes('This account is disabled')?'This account is currently disabled. The owner must review its status and re-enable it before sign-in can continue.':e.message==='RATE'?'You are sending messages too quickly. Please wait a moment and try again.':
+      e.message==='INSUFFICIENT_CREDITS'?'You have run out of credits. Open Plans to review your balance and options.':
       e.message==='PROVIDER_LIMIT'?'The AI provider is temporarily at its usage limit. Please try again shortly.':
       e.message==='PROVIDER_ERROR'?'The AI service is temporarily unavailable. Please try again shortly.':
       e.message.startsWith('API:')?'Error: '+e.message.slice(4):(e.message.startsWith('Gemini error')||e.message.startsWith('Gemini is selected')||e.message.startsWith('OpenAI')||e.message.startsWith('AI provider temporarily'))?e.message:'Could not connect to the server. It may be waking up; please try again in a minute.';
