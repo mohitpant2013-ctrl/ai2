@@ -223,18 +223,18 @@ async function ddg(q, domains = []) {
   const r = await fetch('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(query), { headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36', 'Accept-Language': 'en-US,en;q=0.9' }, signal: AbortSignal.timeout(9000) });
   if (!r.ok) return [];
   const html = await r.text(), out = [], seen = new Set();
-  const links = /<a\\b([^>]*)>([\\s\\S]*?)<\\/a>/gi;
+  const links = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
   let m;
   while ((m = links.exec(html)) && out.length < 6) {
-    if (!/\\bresult__a\\b/i.test(m[1])) continue;
-    const href = (m[1].match(/\\bhref=["']([^"']+)["']/i) || [])[1];
+    if (!/\bresult__a\b/i.test(m[1])) continue;
+    const href = (m[1].match(/\bhref=["']([^"']+)["']/i) || [])[1];
     if (!href) continue;
     let url = href;
     try { const parsed = new URL(href, 'https://duckduckgo.com'); url = parsed.searchParams.get('uddg') || parsed.href; } catch {}
     if (!safeUrl(url) || seen.has(url)) continue;
     seen.add(url);
     const tail = html.slice(links.lastIndex, links.lastIndex + 2600);
-    const snippet = (tail.match(/class=["'][^"']*result__snippet[^"']*["'][^>]*>([\\s\\S]*?)<\\/(?:div|a|td)>/i) || [])[1] || '';
+    const snippet = (tail.match(/class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|a|td)>/i) || [])[1] || '';
     const title = strip(m[2]).slice(0, 100);
     const text = strip(snippet).slice(0, 700) || title;
     if (title) out.push({ title, url, text });
