@@ -241,7 +241,7 @@ body{background:radial-gradient(ellipse at 72% -15%,rgba(124,92,255,.18),transpa
   <div id="top"><button id="menu" class="ib" onclick="$('side').classList.toggle('open')"><i data-i="menu"></i></button>
     <span class="pill"><span class="dot wait" id="dot"></span><span id="stxt">Checking...</span></span><span id="syncStatus" class="fine" aria-live="polite" style="white-space:nowrap">Saved</span>
     <button onclick="openSettings()" title="Settings" aria-label="Settings">⚙</button><button id="focusToggle" class="topAction" type="button" onclick="toggleFocusMode()" aria-pressed="false" title="Hide the sidebar for a distraction-free chat">Focus</button><button class="topAction" type="button" onclick="openShortcuts()" title="Keyboard shortcuts">⌨</button>
-    <a href="/upgrade" class="top-upgrade">✦ Upgrade <span id="creditCount">…</span></a><select id="deviceMode" aria-label="Device layout" title="Choose an interface layout" onchange="setDeviceMode(this.value)"><option value="auto">Auto layout</option><option value="tv">TV / remote</option><option value="touch">Touchscreen</option><option value="controller">Controller</option><option value="compact">Compact</option></select><select id="mode" onchange="localStorage.setItem('deft_mode',this.value)"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Dost</option><option value="short">Short</option></select></div>
+    <a href="/upgrade" class="top-upgrade">✦ Upgrade <span id="creditCount">…</span></a><select id="deviceMode" aria-label="Device layout" title="Choose an interface layout" onchange="setDeviceMode(this.value)"><option value="auto">Auto layout</option><option value="tv">TV / remote</option><option value="touch">Touchscreen</option><option value="controller">Controller</option><option value="compact">Compact</option></select><select id="mode" onchange="localStorage.setItem('deft_mode',this.value)"><option value="">Normal</option><option value="teacher">Teacher</option><option value="coder">Coder</option><option value="friend">Friendly</option><option value="short">Short</option></select></div>
   <div id="chat"><div class="wrap" id="msgs"></div></div>
   <div id="box"><div id="bar">
     <div id="pend"></div>
@@ -249,13 +249,13 @@ body{background:radial-gradient(ellipse at 72% -15%,rgba(124,92,255,.18),transpa
       <button class="ib" onclick="$('file').click()" title="Image / file"><i data-i="clip"></i></button>
       
       <button class="ib image-tool" onclick="openImageStudio()" title="Create an image · 20 credits"><i data-i="image"></i></button>
-      <button id="mic" class="ib" onclick="mic()" title="Bol ke poochho"><i data-i="mic"></i></button>
+      <button id="mic" class="ib" onclick="mic()" title="Ask by voice"><i data-i="mic"></i></button>
       <input type="file" id="file" multiple hidden accept="image/*,.txt,.md,.csv,.json,.js,.py,.html,.css,.java,.c,.cpp,.xml,.log,.pdf">
-      <textarea id="inp" rows="1" placeholder="DeftAI se kuch bhi poochho..."></textarea>
+      <textarea id="inp" rows="1" placeholder="Ask DeftAI anything…"></textarea>
       <button id="stop" class="ib" onclick="ctrl&&ctrl.abort()" title="Stop"><i data-i="stop"></i></button>
       <button id="send" class="ib" onclick="send()" title="Send"><i data-i="up"></i></button>
     </div><div id="composerTools"><label for="modelChoice">Model</label><select id="modelChoice" aria-label="Choose AI model"><option value="">Loading models…</option></select><button type="button" id="promptLibraryBtn" class="incognito-toggle" onclick="openPromptLibrary()" title="Insert a ready-made prompt">✧ Prompts</button><button type="button" id="incognitoToggle" class="incognito-toggle" onclick="toggleIncognito()" aria-pressed="false" title="Incognito: chats are not saved">◉ Incognito</button><span id="privacyStatus">DeftAI · Deft-Extra · Groq</span></div></div>
-    <div class="fine">DeftAI galti kar sakta hai. Zaroori baatein sources se check karo.</div></div>
+    <div class="fine">DeftAI can make mistakes. Verify important information with reliable sources.</div></div>
 </div>
 
 
@@ -728,11 +728,11 @@ async function go(){
     paint(bd,full,srcs);scrollChat();c.messages.push({role:'assistant',content:full,sources:srcs});actions(c);
   }catch(e){
     if(e.name==='AbortError'){if(full)c.messages.push({role:'assistant',content:full+' _[stopped]_'});paint(bd,full+' _[stopped]_',srcs)}
-    else{const m=e.message==='AUTH'?'Session expire ho gaya. Dobara sign in karo.':e.message.includes('This account is disabled')?'This account is currently disabled. The owner must review its status and re-enable it before sign-in can continue.':e.message==='RATE'?'Bahut jaldi-jaldi messages. Thodi der rukkar try karo.':
-      e.message==='INSUFFICIENT_CREDITS'?'Credits khatam ho gaye. Plans kholkar balance aur credit options dekho.':
-      e.message==='PROVIDER_LIMIT'?'DeftAI ka AI provider abhi usage limit par hai. Alternate models bhi busy hain; thodi der baad try karo.':
-      e.message==='PROVIDER_ERROR'?'AI service temporarily unavailable hai. Thodi der baad retry karo.':
-      e.message.startsWith('API:')?'Error: '+e.message.slice(4):(e.message.startsWith('Gemini error')||e.message.startsWith('Gemini is selected')||e.message.startsWith('OpenAI')||e.message.startsWith('AI provider temporarily'))?e.message:'Server se connect nahi hua. Render free plan so jata hai, 1 minute baad try karo.';
+    else{const m=e.message==='AUTH'?'Your session expired. Please sign in again.':e.message.includes('This account is disabled')?'This account is currently disabled. The owner must review its status and re-enable it before sign-in can continue.':e.message==='RATE'?'You're sending messages too quickly. Please wait a moment and try again.':
+      e.message==='INSUFFICIENT_CREDITS'?'You've run out of credits. Open Plans to review your balance and options.':
+      e.message==='PROVIDER_LIMIT'?'The AI provider is temporarily at its usage limit. Please try again shortly.':
+      e.message==='PROVIDER_ERROR'?'The AI service is temporarily unavailable. Please try again shortly.':
+      e.message.startsWith('API:')?'Error: '+e.message.slice(4):(e.message.startsWith('Gemini error')||e.message.startsWith('Gemini is selected')||e.message.startsWith('OpenAI')||e.message.startsWith('AI provider temporarily'))?e.message:'Could not connect to the server. It may be waking up; please try again in a minute.';
       bd.textContent=m;c.messages.pop()}
   }finally{ctrl=null;$('send').style.display='';$('stop').style.display='none';save();loadStore()}
 }
